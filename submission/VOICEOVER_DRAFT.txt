@@ -1,0 +1,11 @@
+Studying rarely begins with clean, accessible text. Notes arrive as screenshots, camera photos, scanned pages, PDFs, documents, and copied passages.
+
+Enlighten turns all of that material into one continuous study flow on Android. The phone extracts text on device, then reads it aloud with an installed offline voice. Live word highlighting, speed control, pause, and sentence navigation help the learner stay with the passage.
+
+When the reading ends, Enlighten can continue into a private AI explanation. Only the study text travels across the learner's trusted network to Ollama running Llama 3.2 on their own computer. There is no paid inference API and no cloud OCR upload.
+
+The explanation becomes active practice immediately. Enlighten identifies important terms and key points, generates editable flashcards, opens a quiz mode, and keeps an Ask Your Tutor conversation grounded in the same source. A complete session can be saved as a study set on the phone.
+
+I built Enlighten with Codex as my engineering partner. Codex audited the existing project, implemented and refined the Jetpack Compose architecture, connected on-device OCR and local inference, designed the text-to-speech state machine, debugged real Pixel behavior, and verified the result with tests, lint, and a production launch site.
+
+Enlighten makes almost any material easier to hear, understand, and practice, while keeping the student in control of their data.

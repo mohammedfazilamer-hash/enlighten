@@ -1,0 +1,41 @@
+color=c=0xf7f8f4:s=1920x1080:d=10:r=30[bg0];
+[bg0]drawbox=x=1120:y=0:w=800:h=1080:color=0xe8f1ed:t=fill[base0];
+[0:v]crop=557:941:0:0,scale=640:1080:flags=lanczos,setsar=1,fps=30,format=rgba,fade=t=in:st=0:d=1:alpha=1[p0];
+[base0][p0]overlay=x='if(lt(t,1.2),1920-740*t/1.2,1180)':y=0:shortest=1,drawtext=font='Segoe UI':text='ENLIGHTEN ORIGIN':x=120:y=155:fontsize=30:fontcolor=0x0f665d,drawtext=font='Segoe UI Semibold':text='THE LONG DAY':x=120:y=230:fontsize=78:fontcolor=0x102a26,drawtext=font='Segoe UI':text='DRIVE. CLASS. REPEAT.':x=125:y=355:fontsize=37:fontcolor=0xd18b00,drawbox=x=125:y=440:w=780:h=4:color=0x0f665d:t=fill,drawtext=font='Segoe UI':text='A RIDESHARE SHIFT ENDS AFTER DARK.':x=125:y=485:fontsize=28:fontcolor=0x405752,fade=t=in:st=0:d=0.35:color=white,fade=t=out:st=9.6:d=0.4:color=white[s0];
+
+color=c=0xf7f8f4:s=1920x1080:d=11:r=30[bg1];
+[bg1]drawbox=x=1120:y=0:w=800:h=1080:color=0xe8f1ed:t=fill[base1];
+[1:v]crop=557:941:557:0,scale=640:1080:flags=lanczos,setsar=1,fps=30,format=rgba,fade=t=in:st=0:d=1:alpha=1[p1];
+[base1][p1]overlay=x='if(lt(t,1.2),1920-740*t/1.2,1180)':y=0:shortest=1,drawtext=font='Segoe UI':text='ENLIGHTEN ORIGIN':x=120:y=155:fontsize=30:fontcolor=0x0f665d,drawtext=font='Segoe UI Semibold':text='NO ENERGY LEFT':x=120:y=230:fontsize=74:fontcolor=0x102a26,drawtext=font='Segoe UI':text='THE BOOKS ARE READY. I AM NOT.':x=125:y=355:fontsize=35:fontcolor=0xd18b00,drawbox=x=125:y=440:w=780:h=4:color=0x0f665d:t=fill,drawtext=font='Segoe UI':text='THE PROBLEM IS NOT MOTIVATION.':x=125:y=485:fontsize=28:fontcolor=0x405752,fade=t=in:st=0:d=0.35:color=white,fade=t=out:st=10.6:d=0.4:color=white[s1];
+
+color=c=0xf7f8f4:s=1920x1080:d=9:r=30[bg2];
+[bg2]drawbox=x=1120:y=0:w=800:h=1080:color=0xe8f1ed:t=fill[base2];
+[2:v]crop=558:941:1114:0,scale=641:1080:flags=lanczos,setsar=1,fps=30,format=rgba,fade=t=in:st=0:d=1:alpha=1[p2];
+[base2][p2]overlay=x='if(lt(t,1.2),1920-740*t/1.2,1179)':y=0:shortest=1,drawtext=font='Segoe UI':text='ENLIGHTEN ORIGIN':x=120:y=155:fontsize=30:fontcolor=0x0f665d,drawtext=font='Segoe UI Semibold':text='THE IDEA':x=120:y=230:fontsize=78:fontcolor=0x102a26,drawtext=font='Segoe UI':text='WHAT IF STUDY COULD MOVE WITH ME?':x=125:y=355:fontsize=34:fontcolor=0xd18b00,drawbox=x=125:y=440:w=780:h=4:color=0x0f665d:t=fill,drawtext=font='Segoe UI':text='HEAR. UNDERSTAND. PRACTICE.':x=125:y=485:fontsize=28:fontcolor=0x405752,fade=t=in:st=0:d=0.35:color=white,fade=t=out:st=8.6:d=0.4:color=white[s2];
+
+color=c=0xf7f8f4:s=1920x1080:d=12:r=30[bg3];
+[bg3]drawbox=x=1040:y=0:w=880:h=1080:color=0xe8f1ed:t=fill[base3];
+[3:v]crop=836:941:0:0,scale=959:1080:flags=lanczos,setsar=1,fps=30,format=rgba,fade=t=in:st=0:d=1:alpha=1[p3];
+[base3][p3]overlay=x='if(lt(t,1.2),1920-980*t/1.2,960)':y=0:shortest=1,drawtext=font='Segoe UI':text='STORY 01':x=100:y=155:fontsize=30:fontcolor=0x0f665d,drawtext=font='Segoe UI Semibold':text='STUDY IN':x=100:y=230:fontsize=72:fontcolor=0x102a26,drawtext=font='Segoe UI Semibold':text='TRANSIT':x=100:y=315:fontsize=72:fontcolor=0x102a26,drawtext=font='Segoe UI':text='REVIEW ON THE WAY.':x=105:y=445:fontsize=35:fontcolor=0xd18b00,drawbox=x=105:y=525:w=700:h=4:color=0x0f665d:t=fill,drawtext=font='Segoe UI':text='PASSENGERS AND PUBLIC TRANSIT ONLY.':x=105:y=570:fontsize=25:fontcolor=0x405752,fade=t=in:st=0:d=0.35:color=white,fade=t=out:st=11.6:d=0.4:color=white[s3];
+
+color=c=0xf7f8f4:s=1920x1080:d=11:r=30[bg4];
+[bg4]drawbox=x=1040:y=0:w=880:h=1080:color=0xe8f1ed:t=fill[base4];
+[4:v]crop=836:941:836:0,scale=959:1080:flags=lanczos,setsar=1,fps=30,format=rgba,fade=t=in:st=0:d=1:alpha=1[p4];
+[base4][p4]overlay=x='if(lt(t,1.2),1920-980*t/1.2,960)':y=0:shortest=1,drawtext=font='Segoe UI':text='STORY 02':x=100:y=155:fontsize=30:fontcolor=0x0f665d,drawtext=font='Segoe UI Semibold':text='KEEP THE':x=100:y=230:fontsize=72:fontcolor=0x102a26,drawtext=font='Segoe UI Semibold':text='WORKOUT':x=100:y=315:fontsize=72:fontcolor=0x102a26,drawtext=font='Segoe UI':text='KEEP THE LESSON.':x=105:y=445:fontsize=35:fontcolor=0xd18b00,drawbox=x=105:y=525:w=700:h=4:color=0x0f665d:t=fill,drawtext=font='Segoe UI':text='LOAD IT. LOCK THE PHONE. LISTEN.':x=105:y=570:fontsize=26:fontcolor=0x405752,fade=t=in:st=0:d=0.35:color=white,fade=t=out:st=10.6:d=0.4:color=white[s4];
+
+color=c=0xf7f8f4:s=1920x1080:d=11:r=30[bg5];
+[bg5]drawbox=x=1120:y=0:w=800:h=1080:color=0xe8f1ed:t=fill[base5];
+[5:v]crop=557:941:0:0,scale=640:1080:flags=lanczos,setsar=1,fps=30,format=rgba,fade=t=in:st=0:d=1:alpha=1[p5];
+[base5][p5]overlay=x='if(lt(t,1.2),1920-740*t/1.2,1180)':y=0:shortest=1,drawtext=font='Segoe UI':text='STORY 03':x=120:y=155:fontsize=30:fontcolor=0x0f665d,drawtext=font='Segoe UI Semibold':text='LEARN THROUGH':x=120:y=230:fontsize=66:fontcolor=0x102a26,drawtext=font='Segoe UI Semibold':text='CHORES':x=120:y=310:fontsize=72:fontcolor=0x102a26,drawtext=font='Segoe UI':text='CHORES DONE. CHAPTER REVIEWED.':x=125:y=435:fontsize=33:fontcolor=0xd18b00,drawbox=x=125:y=520:w=780:h=4:color=0x0f665d:t=fill,drawtext=font='Segoe UI':text='TURN SOME PHONE TIME INTO FOCUS.':x=125:y=565:fontsize=27:fontcolor=0x405752,fade=t=in:st=0:d=0.35:color=white,fade=t=out:st=10.6:d=0.4:color=white[s5];
+
+color=c=0xf7f8f4:s=1920x1080:d=8:r=30[bg6];
+[bg6]drawbox=x=1120:y=0:w=800:h=1080:color=0xe8f1ed:t=fill[base6];
+[6:v]crop=557:941:557:0,scale=640:1080:flags=lanczos,setsar=1,fps=30,format=rgba,fade=t=in:st=0:d=1:alpha=1[p6];
+[base6][p6]overlay=x='if(lt(t,1.2),1920-740*t/1.2,1180)':y=0:shortest=1,drawtext=font='Segoe UI':text='STORY 04':x=120:y=155:fontsize=30:fontcolor=0x0f665d,drawtext=font='Segoe UI Semibold':text='FROM WORDS':x=120:y=230:fontsize=68:fontcolor=0x102a26,drawtext=font='Segoe UI Semibold':text='TO MEANING':x=120:y=312:fontsize=68:fontcolor=0x102a26,drawtext=font='Segoe UI':text='SIMPLE EXPLANATIONS. KEY IDEAS.':x=125:y=435:fontsize=32:fontcolor=0xd18b00,drawbox=x=125:y=520:w=780:h=4:color=0x0f665d:t=fill,drawtext=font='Segoe UI':text='UNDERSTANDING BEFORE MEMORIZATION.':x=125:y=565:fontsize=25:fontcolor=0x405752,fade=t=in:st=0:d=0.35:color=white,fade=t=out:st=7.6:d=0.4:color=white[s6];
+
+color=c=0xf7f8f4:s=1920x1080:d=9:r=30[bg7];
+[bg7]drawbox=x=1120:y=0:w=800:h=1080:color=0xe8f1ed:t=fill[base7];
+[7:v]crop=558:941:1114:0,scale=641:1080:flags=lanczos,setsar=1,fps=30,format=rgba,fade=t=in:st=0:d=1:alpha=1[p7];
+[base7][p7]overlay=x='if(lt(t,1.2),1920-740*t/1.2,1179)':y=0:shortest=1,drawtext=font='Segoe UI':text='ENLIGHTEN':x=120:y=155:fontsize=30:fontcolor=0x0f665d,drawtext=font='Segoe UI Semibold':text='A TEACHER':x=120:y=230:fontsize=72:fontcolor=0x102a26,drawtext=font='Segoe UI Semibold':text='IN YOUR POCKET':x=120:y=315:fontsize=68:fontcolor=0x102a26,drawtext=font='Segoe UI':text='HEAR. UNDERSTAND. PRACTICE.':x=125:y=440:fontsize=34:fontcolor=0xd18b00,drawbox=x=125:y=525:w=780:h=4:color=0x0f665d:t=fill,drawtext=font='Segoe UI':text='BUILT FOR THE MOMENTS LIFE GIVES YOU.':x=125:y=570:fontsize=26:fontcolor=0x405752,fade=t=in:st=0:d=0.35:color=white,fade=t=out:st=8.6:d=0.4:color=white[s7];
+
+[s0][s1][s2][s3][s4][s5][s6][s7]concat=n=8:v=1:a=0,format=yuv420p[outv]

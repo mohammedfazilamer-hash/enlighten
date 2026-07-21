@@ -1,0 +1,26 @@
+*.iml
+.DS_Store
+.gradle/
+.kotlin/
+.idea/
+.externalNativeBuild/
+.cxx/
+build/
+app/build/
+captures/
+local.properties
+
+# Local device diagnostics and uncurated screen captures.
+/*.png
+/*.xml
+/artifacts/
+
+# Submission working files. Curated outputs can be moved into docs/media.
+/submission/raw/
+/submission/rendered/
+
+# Optional promotional site dependencies and local output.
+/site/node_modules/
+/site/dist/
+/site/.devserver.log
+/site/.devserver.err

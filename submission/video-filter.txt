@@ -1,0 +1,18 @@
+[0:v]scale=1920:1080:force_original_aspect_ratio=increase,crop=1920:1080,setsar=1,fps=30[v0];
+color=c=0x071a17:s=1920x1080:d=14:r=30[bg1];
+[1:v]trim=duration=14,setpts=PTS-STARTPTS,scale=-2:980,setsar=1,fps=30[p1];
+[bg1][p1]overlay=1320:50:shortest=1,drawtext=font='Segoe UI':text='ENLIGHTEN':x=120:y=170:fontsize=32:fontcolor=0x59dbc4,drawtext=font='Segoe UI':text='HEAR IT':x=120:y=245:fontsize=92:fontcolor=white,drawtext=font='Segoe UI':text='Offline voice':x=125:y=410:fontsize=44:fontcolor=0xf8bf2c,drawtext=font='Segoe UI':text='Live word highlighting':x=125:y=490:fontsize=44:fontcolor=white,drawtext=font='Segoe UI':text='Playback controls':x=125:y=570:fontsize=44:fontcolor=white[v1];
+color=c=0x0a2330:s=1920x1080:d=12:r=30[bg2];
+[2:v]trim=duration=12,setpts=PTS-STARTPTS,scale=-2:980,setsar=1,fps=30[p2];
+[bg2][p2]overlay=1320:50:shortest=1,drawbox=x=1337:y=430:w=400:h=74:color=0x121b1a:t=fill,drawtext=font='Segoe UI':text='Private network':x=1350:y=450:fontsize=22:fontcolor=white,drawtext=font='Segoe UI':text='ENLIGHTEN':x=120:y=170:fontsize=32:fontcolor=0x59dbc4,drawtext=font='Segoe UI':text='UNDERSTAND IT':x=120:y=245:fontsize=82:fontcolor=white,drawtext=font='Segoe UI':text='Private Llama 3.2':x=125:y=410:fontsize=44:fontcolor=0xf8bf2c,drawtext=font='Segoe UI':text='No paid API':x=125:y=490:fontsize=44:fontcolor=white,drawtext=font='Segoe UI':text='Your computer does the thinking':x=125:y=570:fontsize=38:fontcolor=white[v2];
+color=c=0x3b1720:s=1920x1080:d=14:r=30[bg3];
+[3:v]trim=duration=9.26,setpts=1.512*(PTS-STARTPTS),scale=-2:980,setsar=1,fps=30[p3];
+[bg3][p3]overlay=1320:50:shortest=1,drawtext=font='Segoe UI':text='ENLIGHTEN':x=120:y=170:fontsize=32:fontcolor=0xffa6b9,drawtext=font='Segoe UI':text='MAKE MEANING':x=120:y=245:fontsize=82:fontcolor=white,drawtext=font='Segoe UI':text='Simple explanation':x=125:y=410:fontsize=44:fontcolor=0xf8bf2c,drawtext=font='Segoe UI':text='Important terms':x=125:y=490:fontsize=44:fontcolor=white,drawtext=font='Segoe UI':text='Key points and quiz questions':x=125:y=570:fontsize=38:fontcolor=white[v3];
+color=c=0x10251e:s=1920x1080:d=22:r=30[bg4];
+[4:v]trim=duration=22,setpts=PTS-STARTPTS,scale=-2:980,setsar=1,fps=30[p4];
+[bg4][p4]overlay=1320:50:shortest=1,drawbox=x=1337:y=300:w=400:h=74:color=0x121b1a:t=fill,drawtext=font='Segoe UI':text='Private network':x=1350:y=320:fontsize=22:fontcolor=white,drawtext=font='Segoe UI':text='ENLIGHTEN':x=120:y=170:fontsize=32:fontcolor=0x59dbc4,drawtext=font='Segoe UI':text='BUILD PRACTICE':x=120:y=245:fontsize=82:fontcolor=white,drawtext=font='Segoe UI':text='Four study cards':x=125:y=410:fontsize=44:fontcolor=0xf8bf2c,drawtext=font='Segoe UI':text='Generated from the same source':x=125:y=490:fontsize=38:fontcolor=white[v4];
+color=c=0x22202b:s=1920x1080:d=12:r=30[bg5];
+[5:v]trim=duration=12,setpts=PTS-STARTPTS,scale=-2:980,setsar=1,fps=30[p5];
+[bg5][p5]overlay=1320:50:shortest=1,drawtext=font='Segoe UI':text='ENLIGHTEN':x=120:y=170:fontsize=32:fontcolor=0x59dbc4,drawtext=font='Segoe UI':text='ACTIVE RECALL':x=120:y=245:fontsize=82:fontcolor=white,drawtext=font='Segoe UI':text='Flip a card':x=125:y=410:fontsize=44:fontcolor=0xf8bf2c,drawtext=font='Segoe UI':text='Check an answer':x=125:y=490:fontsize=44:fontcolor=white,drawtext=font='Segoe UI':text='Switch to quiz mode':x=125:y=570:fontsize=44:fontcolor=white[v5];
+[6:v]scale=1920:1080:force_original_aspect_ratio=increase,crop=1920:1080,setsar=1,fps=30[v6];
+[v0][v1][v2][v3][v4][v5][v6]concat=n=7:v=1:a=0[outv]

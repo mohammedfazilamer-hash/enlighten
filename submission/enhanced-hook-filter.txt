@@ -1,0 +1,4 @@
+color=c=0x071a17:s=1920x1080:d=5:r=30[bg];
+[0:v]crop=557:941:0:0,scale=700:1182:flags=lanczos,setsar=1,fps=30,format=rgba,fade=t=in:st=0:d=1:alpha=1[art];
+[bg]drawbox=x=1120:y=0:w=800:h=1080:color=0xe8f1ed:t=fill[base];
+[base][art]overlay=x='if(lt(t,1.2),1920-780*t/1.2,1180)':y=-50:shortest=1,drawtext=font='Segoe UI':text='A TRUE STORY':x=120:y=150:fontsize=32:fontcolor=0x59dbc4,drawtext=font='Segoe UI Semibold':text='I WAS TOO TIRED':x=120:y=235:fontsize=76:fontcolor=white,drawtext=font='Segoe UI Semibold':text='TO STUDY.':x=120:y=325:fontsize=82:fontcolor=white,drawbox=x=125:y=455:w=760:h=4:color=0xf8bf2c:t=fill,drawtext=font='Segoe UI':text='SO I BUILT A BETTER WAY.':x=125:y=505:fontsize=36:fontcolor=0xf8bf2c,drawtext=font='Segoe UI':text='ENLIGHTEN':x=125:y=600:fontsize=30:fontcolor=0x9fb9b3,fade=t=in:st=0:d=0.35:color=0x071a17,fade=t=out:st=4.55:d=0.45:color=white[outv]
