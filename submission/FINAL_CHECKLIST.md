@@ -10,7 +10,7 @@
 - [x] Upload a public YouTube demo shorter than three minutes: https://youtu.be/grTq2VqST6E
 - [x] Include audio that explains how Codex and the confirmed model were used.
 - [x] Change the launch site to public access: https://enlighten-study.mohammedfazilamer.chatgpt.site
-- [ ] Submit before July 21, 2026 at 5:00 p.m. PDT / 8:00 p.m. EDT.
+- [x] Submit before July 21, 2026 at 5:00 p.m. PDT / 8:00 p.m. EDT: https://devpost.com/software/enlighten-ewg7j5
 
 ## Repository
 
@@ -38,8 +38,8 @@
 - [x] Category is `Education`.
 - [x] Description explains the problem, working solution, local-AI trade-off, and impact.
 - [x] Technology list includes Codex, Kotlin, Compose, ML Kit, Android TTS, Ollama, and Llama 3.2.
-- [ ] Video URL, repository URL, promotional site URL, and `/feedback` session ID are correct.
-- [ ] Final form is previewed before submission.
+- [x] Video URL, repository URL, promotional site URL, and `/feedback` session ID are correct.
+- [x] Final form is previewed before submission.
 
 ## Recommended Final Order
 
