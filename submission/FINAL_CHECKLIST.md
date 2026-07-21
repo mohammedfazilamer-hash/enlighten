@@ -18,7 +18,7 @@
 - [x] No `local.properties`, build cache, raw capture, personal image, or personal LAN address is tracked.
 - [x] Tests and lint pass in the prepared workspace.
 - [x] The APK checksum and build command are recorded.
-- [ ] Repository URL works in a private browser window or judge account.
+- [x] Repository URL works in a private browser window or judge account.
 - [x] License choice matches the repository visibility and owner's intent: MIT.
 
 ## Demo
