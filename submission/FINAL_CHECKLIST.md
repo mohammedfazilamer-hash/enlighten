@@ -2,13 +2,13 @@
 
 ## Blocking Requirements
 
-- [ ] Confirm eligibility and join the OpenAI Build Week challenge on Devpost.
-- [ ] Confirm the exact model used by the Codex task before saying `GPT-5.6`.
-- [ ] Run `/feedback` in the Codex task containing most core development and record the session ID.
+- [x] Confirm eligibility and join the OpenAI Build Week challenge on Devpost.
+- [x] Confirm the exact model used by the Codex task before saying `GPT-5.6`: `gpt-5.6-sol`.
+- [x] Run `/feedback` in the Codex task containing most core development and record the session ID.
 - [x] Create the repository and choose public access with a license, or private access shared with `testing@devpost.com` and `build-week-event@openai.com`: https://github.com/mohammedfazilamer-hash/enlighten
-- [ ] Replace every `ADD_*` placeholder in `submission/DEVPOST.md`.
-- [x] Upload a public YouTube demo shorter than three minutes: https://youtu.be/YXYXkX5M_H4
-- [ ] Include audio that explains how Codex and the confirmed model were used.
+- [x] Replace every `ADD_*` placeholder in `submission/DEVPOST.md`.
+- [x] Upload a public YouTube demo shorter than three minutes: https://youtu.be/grTq2VqST6E
+- [x] Include audio that explains how Codex and the confirmed model were used.
 - [x] Change the launch site to public access: https://enlighten-study.mohammedfazilamer.chatgpt.site
 - [ ] Submit before July 21, 2026 at 5:00 p.m. PDT / 8:00 p.m. EDT.
 
@@ -30,14 +30,14 @@
 - [ ] Capture a grounded Ask Your Tutor answer if it is included in the final edit.
 - [x] Every clip uses the current interface and contains no unrelated personal data.
 - [x] Voiceover matches visible behavior and makes no unverified claims.
-- [x] The enhanced final local video is 2:55.64, below the three-minute limit.
+- [x] The enhanced GPT-5.6 final local video is 2:55.63, below the three-minute limit.
 - [x] Captions are reviewed for model names, technical terms, and safe transit use.
 
 ## Devpost
 
-- [ ] Category is `Education`.
-- [ ] Description explains the problem, working solution, local-AI trade-off, and impact.
-- [ ] Technology list includes Codex, Kotlin, Compose, ML Kit, Android TTS, Ollama, and Llama 3.2.
+- [x] Category is `Education`.
+- [x] Description explains the problem, working solution, local-AI trade-off, and impact.
+- [x] Technology list includes Codex, Kotlin, Compose, ML Kit, Android TTS, Ollama, and Llama 3.2.
 - [ ] Video URL, repository URL, promotional site URL, and `/feedback` session ID are correct.
 - [ ] Final form is previewed before submission.
 

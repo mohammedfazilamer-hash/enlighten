@@ -1,7 +1,8 @@
 # Enlighten Build Week Demo Video
 
-> Final enhanced cut: `submission/rendered/Enlighten-Build-Week-Enhanced-Free-Final.mp4`  
-> Runtime: 2:55.64. A five-second hook leads into the 80.7-second illustrated origin story in `ANIMATED_OPENING.md`; the original product-demo plan below begins immediately afterward. The export includes a quiet original soundtrack and no third-party editor watermark.
+> Final enhanced cut: `submission/rendered/Enlighten-Build-Week-Enhanced-GPT56-Final.mp4`
+>
+> Runtime: 2:55.63. A five-second hook leads into the 80.7-second illustrated origin story in `ANIMATED_OPENING.md`; the original product-demo plan below begins immediately afterward. The export includes a quiet original soundtrack and no third-party editor watermark.
 
 ## Target
 
@@ -39,7 +40,7 @@ The same source becomes editable flashcards, a self-check quiz, and an Ask Tutor
 
 The phone handles OCR, documents, speech, and storage. AI runs through Ollama and Llama 3.2 on my own computer, so there is no paid inference API and no cloud OCR upload.
 
-I built Enlighten with Codex using **[CONFIRM THE EXACT BUILD WEEK MODEL BEFORE RECORDING]**. Codex implemented and tested the Android architecture, OCR pipeline, speech state machine, local inference flow, persistence, and real-device fixes, while I directed the learning experience and privacy decisions.
+I built Enlighten with Codex powered by GPT-5.6. It implemented and tested the Android architecture, OCR pipeline, speech state machine, local inference, persistence, and real-device fixes, while I directed the learning experience and privacy decisions.
 
 Enlighten makes almost any material something a student can hear, understand, and practice.
 

@@ -8,7 +8,7 @@
 
 Enlighten is a local-first Android study companion. It extracts text from screenshots, camera photos, PDFs, DOCX files, and TXT files; reads the material aloud with live highlighting; and turns it into a simpler explanation, flashcards, quiz prompts, and a passage-grounded tutor conversation.
 
-The application was built with Codex for the OpenAI Build Week Education track. It uses Android services on the phone and a free local Ollama model on the student's computer. There is no paid inference API, account, or cloud application backend.
+The application was built with Codex powered by GPT-5.6 (`gpt-5.6-sol`) for the OpenAI Build Week Education track. It uses Android services on the phone and a free local Ollama model on the student's computer. There is no paid inference API, account, or cloud application backend.
 
 ![Enlighten highlighting a photosynthesis passage while reading](docs/media/live-reading.png)
 
@@ -131,9 +131,11 @@ A prepared passage and exact demo flow are available in [submission/DEMO_DATA.md
 
 ## How Codex Helped
 
-Codex served as the engineering collaborator across the full product lifecycle. It inspected the existing code before each change, implemented the Compose interface and local data flows, connected ML Kit OCR and Ollama, built the TTS narration state machine, added persistent study sets and profile images, diagnosed Android device behavior, ran Gradle tests and lint, and produced a measured architecture review.
+Codex powered by GPT-5.6 served as the engineering collaborator across the full product lifecycle. It inspected the existing code before each change, implemented the Compose interface and local data flows, connected ML Kit OCR and Ollama, built the TTS narration state machine, added persistent study sets and profile images, diagnosed Android device behavior, ran Gradle tests and lint, and produced a measured architecture review.
 
 The human builder directed the product: defining the student workflow, choosing a no-paid-API privacy model, testing the experience on a Pixel 9, and deciding which learning features mattered. Codex turned those decisions into a working Android application and repeatedly verified the result on real hardware.
+
+The Build Week task metadata confirmed the model as `gpt-5.6-sol`. The submitted `/feedback` session ID is `019f2ab8-44a3-76a0-bf9b-600cc6b03cee`.
 
 ## Current Limitations
 

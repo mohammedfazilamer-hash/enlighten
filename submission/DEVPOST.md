@@ -36,9 +36,7 @@ The Android application is written in Kotlin with Jetpack Compose and Material 3
 
 The app communicates directly with Ollama through its local `/api/tags` and `/api/generate` endpoints. Explanation and tutor prompts use low temperatures for stable educational output. Flashcards request structured JSON. The selected 3.2B quantized model occupies about 2 GB and generated approximately 133 tokens per second on the development RTX 3070 during a measured warm benchmark.
 
-Codex was the engineering collaborator throughout the build. It inspected the codebase, implemented feature slices, wired Android platform APIs, debugged real Pixel 9 behavior, ran tests and lint, and performed a complete architecture and security audit. I directed the learning experience, privacy constraints, product priorities, and real-device acceptance tests.
-
-**Submission blocker:** Before pasting this section into Devpost or recording narration, verify the exact Codex model shown in the Build Week task. Replace this sentence with a truthful description of how Codex with the confirmed model was used. Do not claim GPT-5.6 until the UI or `/feedback` details confirm it.
+Codex powered by GPT-5.6 was the engineering collaborator throughout the build. It inspected the codebase, implemented feature slices, wired Android platform APIs, debugged real Pixel 9 behavior, ran tests and lint, and performed a complete architecture and security audit. I directed the learning experience, privacy constraints, product priorities, and real-device acceptance tests. The Build Week task metadata confirmed the exact model as `gpt-5.6-sol`.
 
 ## Challenges
 
@@ -93,6 +91,6 @@ The immediate engineering roadmap is token-aware chunking for long documents, so
 ## Links To Fill Before Submission
 
 - Repository: https://github.com/mohammedfazilamer-hash/enlighten
-- Public YouTube demo: https://youtu.be/YXYXkX5M_H4
+- Public YouTube demo: https://youtu.be/grTq2VqST6E
 - Promotional site: https://enlighten-study.mohammedfazilamer.chatgpt.site
-- Codex `/feedback` session ID: `ADD_FEEDBACK_SESSION_ID`
+- Codex `/feedback` session ID: `019f2ab8-44a3-76a0-bf9b-600cc6b03cee`

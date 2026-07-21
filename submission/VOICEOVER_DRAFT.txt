@@ -6,6 +6,6 @@ When the reading ends, Enlighten can continue into a private AI explanation. Onl
 
 The explanation becomes active practice immediately. Enlighten identifies important terms and key points, generates editable flashcards, opens a quiz mode, and keeps an Ask Your Tutor conversation grounded in the same source. A complete session can be saved as a study set on the phone.
 
-I built Enlighten with Codex as my engineering partner. Codex audited the existing project, implemented and refined the Jetpack Compose architecture, connected on-device OCR and local inference, designed the text-to-speech state machine, debugged real Pixel behavior, and verified the result with tests, lint, and a production launch site.
+I built Enlighten with Codex powered by GPT-5.6. It implemented and tested the Android architecture, OCR pipeline, speech state machine, local inference, persistence, and real-device fixes, while I directed the learning experience and privacy decisions.
 
 Enlighten makes almost any material easier to hear, understand, and practice, while keeping the student in control of their data.
