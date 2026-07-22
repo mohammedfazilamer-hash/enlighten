@@ -48,6 +48,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
@@ -210,6 +211,7 @@ internal fun SettingsContent(
             showVoicePicker = false
             onSpeechProviderSelected(provider)
           },
+          modifier = Modifier.testTag("speech-provider-${provider.name}"),
           shape = SegmentedButtonDefaults.itemShape(index = index, count = SpeechProvider.entries.size),
           label = { Text(provider.displayName) },
         )

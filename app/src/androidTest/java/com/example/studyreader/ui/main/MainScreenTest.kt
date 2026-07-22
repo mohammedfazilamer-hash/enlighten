@@ -8,6 +8,7 @@ import androidx.compose.ui.test.junit4.createAndroidComposeRule
 import androidx.compose.ui.test.onNodeWithContentDescription
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.onNodeWithTag
+import androidx.compose.ui.test.onRoot
 import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.performScrollTo
 import androidx.compose.runtime.getValue
@@ -120,6 +121,16 @@ class MainScreenTest {
   }
 
   @Test
+  fun studyPaneFitsInsideTheAvailableWindow() {
+    val rootBounds = composeTestRule.onRoot().fetchSemanticsNode().boundsInRoot
+    val studyBounds = composeTestRule.onNodeWithTag("study-content").fetchSemanticsNode().boundsInRoot
+
+    assertTrue(studyBounds.left >= rootBounds.left)
+    assertTrue(studyBounds.right <= rootBounds.right)
+    assertTrue(studyBounds.width <= 920f * composeTestRule.density.density + 1f)
+  }
+
+  @Test
   fun studySetCanBeSavedAndLibraryOpened() {
     var saveRequested = false
     composeTestRule.runOnIdle { saveStudySetAction = { saveRequested = true } }
@@ -156,8 +167,8 @@ class MainScreenTest {
 
     composeTestRule.onNodeWithText("Interface color").assertExists()
     composeTestRule.onNodeWithText("Reading voice").assertExists()
-    composeTestRule.onNodeWithText("Phone").assertExists()
-    composeTestRule.onNodeWithText("Natural local").assertExists()
+    composeTestRule.onNodeWithTag("speech-provider-Phone").assertExists()
+    composeTestRule.onNodeWithTag("speech-provider-NaturalLocal").assertExists()
     composeTestRule.onNodeWithText("Choose voice").assertIsEnabled()
     composeTestRule.onNodeWithText("Choose voice").performClick()
     composeTestRule.onNodeWithText("Choose reading voice").assertExists()

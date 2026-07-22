@@ -20,12 +20,14 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.clickable
@@ -138,6 +140,10 @@ private const val NATURAL_VOICE_NAME_KEY = "natural_voice_name"
 private const val PROFILE_IMAGE_URI_KEY = "profile_image_uri"
 private const val VOICE_PREVIEW_UTTERANCE_ID = "study-reader-voice-preview"
 private const val PHONE_SPEECH_QUEUE_WINDOW = 4
+
+private val StudyPaneMaxWidth = 920.dp
+private val SettingsPaneMaxWidth = 760.dp
+private val LibraryPaneMaxWidth = 1_100.dp
 
 private val NATURAL_VOICE_OPTIONS =
   listOf(
@@ -1052,59 +1058,83 @@ internal fun StudyReaderScreen(
     ) { innerPadding ->
       when (selectedSection) {
         AppSection.Settings -> {
-          SettingsContent(
-            selectedPalette = selectedPalette,
-            onPaletteSelected = onPaletteSelected,
-            voiceOptions = voiceOptions,
-            selectedVoiceName = selectedVoiceName,
-            onVoiceSelected = onVoiceSelected,
-            speechProvider = speechProvider,
-            onSpeechProviderSelected = onSpeechProviderSelected,
-            naturalVoiceOptions = NATURAL_VOICE_OPTIONS,
-            selectedNaturalVoiceName = selectedNaturalVoiceName,
-            onNaturalVoiceSelected = onNaturalVoiceSelected,
-            onPreviewVoice = onPreviewVoice,
-            voiceControlsEnabled = !isNarrationActive && (speechReady || speechProvider == SpeechProvider.NaturalLocal),
-            aiProviderMode = state.aiProviderMode,
-            onAiProviderSelected = onAiProviderSelected,
-            onDeviceModelStatus = state.onDeviceModelStatus,
-            isImportingOnDeviceModel = state.isImportingOnDeviceModel,
-            onDeviceModelImportProgress = state.onDeviceModelImportProgress,
-            onDeviceModelMessage = state.onDeviceModelMessage,
-            onGetOnDeviceModel = onGetOnDeviceModel,
-            onImportOnDeviceModel = onImportOnDeviceModel,
-            onRemoveOnDeviceModel = onRemoveOnDeviceModel,
+          Box(
             modifier = Modifier.fillMaxSize().padding(innerPadding),
-          )
+            contentAlignment = Alignment.TopCenter,
+          ) {
+            SettingsContent(
+              selectedPalette = selectedPalette,
+              onPaletteSelected = onPaletteSelected,
+              voiceOptions = voiceOptions,
+              selectedVoiceName = selectedVoiceName,
+              onVoiceSelected = onVoiceSelected,
+              speechProvider = speechProvider,
+              onSpeechProviderSelected = onSpeechProviderSelected,
+              naturalVoiceOptions = NATURAL_VOICE_OPTIONS,
+              selectedNaturalVoiceName = selectedNaturalVoiceName,
+              onNaturalVoiceSelected = onNaturalVoiceSelected,
+              onPreviewVoice = onPreviewVoice,
+              voiceControlsEnabled = !isNarrationActive && (speechReady || speechProvider == SpeechProvider.NaturalLocal),
+              aiProviderMode = state.aiProviderMode,
+              onAiProviderSelected = onAiProviderSelected,
+              onDeviceModelStatus = state.onDeviceModelStatus,
+              isImportingOnDeviceModel = state.isImportingOnDeviceModel,
+              onDeviceModelImportProgress = state.onDeviceModelImportProgress,
+              onDeviceModelMessage = state.onDeviceModelMessage,
+              onGetOnDeviceModel = onGetOnDeviceModel,
+              onImportOnDeviceModel = onImportOnDeviceModel,
+              onRemoveOnDeviceModel = onRemoveOnDeviceModel,
+              modifier =
+                Modifier.fillMaxHeight()
+                  .widthIn(max = SettingsPaneMaxWidth)
+                  .fillMaxWidth()
+                  .testTag("settings-content"),
+            )
+          }
         }
 
         AppSection.Library -> {
-          StudySetLibrary(
-            studySets = state.studySets,
-            activeStudySetId = state.activeStudySetId,
-            hasUnsavedChanges = state.hasUnsavedChanges,
-            isLoading = state.isLoadingStudySets,
-            message = state.libraryMessage,
-            onNewStudySet = {
-              onNewStudySet()
-              selectedSectionName = AppSection.Study.name
-            },
-            onOpenStudySet = { id ->
-              onOpenStudySet(id)
-              selectedSectionName = AppSection.Study.name
-            },
-            onDeleteStudySet = onDeleteStudySet,
+          Box(
             modifier = Modifier.fillMaxSize().padding(innerPadding),
-          )
+            contentAlignment = Alignment.TopCenter,
+          ) {
+            StudySetLibrary(
+              studySets = state.studySets,
+              activeStudySetId = state.activeStudySetId,
+              hasUnsavedChanges = state.hasUnsavedChanges,
+              isLoading = state.isLoadingStudySets,
+              message = state.libraryMessage,
+              onNewStudySet = {
+                onNewStudySet()
+                selectedSectionName = AppSection.Study.name
+              },
+              onOpenStudySet = { id ->
+                onOpenStudySet(id)
+                selectedSectionName = AppSection.Study.name
+              },
+              onDeleteStudySet = onDeleteStudySet,
+              modifier =
+                Modifier.fillMaxHeight()
+                  .widthIn(max = LibraryPaneMaxWidth)
+                  .fillMaxWidth()
+                  .testTag("library-content"),
+            )
+          }
         }
 
         AppSection.Study -> {
+          Box(
+            modifier = Modifier.fillMaxSize().padding(innerPadding),
+            contentAlignment = Alignment.TopCenter,
+          ) {
         Column(
           modifier =
-            Modifier.fillMaxSize()
-              .padding(innerPadding)
+            Modifier.fillMaxHeight()
+              .widthIn(max = StudyPaneMaxWidth)
+              .fillMaxWidth()
               .verticalScroll(rememberScrollState())
-              .padding(horizontal = 16.dp, vertical = 12.dp),
+              .padding(horizontal = 16.dp, vertical = 12.dp)
+              .testTag("study-content"),
           verticalArrangement = Arrangement.spacedBy(16.dp),
     ) {
       Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
@@ -1528,6 +1558,7 @@ internal fun StudyReaderScreen(
 
       Spacer(Modifier.height(24.dp))
         }
+          }
       }
     }
   }
