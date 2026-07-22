@@ -9,6 +9,9 @@ build/
 app/build/
 captures/
 local.properties
+keystore.properties
+*.jks
+*.keystore
 
 # Local device diagnostics and uncurated screen captures.
 /*.png

@@ -1,19 +1,45 @@
+import java.util.Properties
+
 plugins {
   alias(libs.plugins.android.application)
   alias(libs.plugins.compose.compiler)
   alias(libs.plugins.kotlin.serialization)
 }
 
+val releaseSigningPropertiesFile = file(
+    providers.gradleProperty("enlightenSigningProperties")
+        .orElse("${System.getProperty("user.home")}/.android/enlighten-signing.properties")
+        .get()
+)
+val releaseSigningProperties = Properties().apply {
+    if (releaseSigningPropertiesFile.isFile) {
+        releaseSigningPropertiesFile.inputStream().use(::load)
+    }
+}
+val hasReleaseSigning = listOf("storeFile", "storePassword", "keyAlias", "keyPassword")
+    .all { !releaseSigningProperties.getProperty(it).isNullOrBlank() }
+
 android {
     namespace = "com.example.studyreader"
     compileSdk = 36
     defaultConfig {
-        applicationId = "com.example.studyreader"
+        applicationId = "com.mohammedfaziluddin.enlighten"
         minSdk = 26
         targetSdk = 36
         versionCode = 1
         versionName = "1.0"
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
+    }
+
+    signingConfigs {
+        if (hasReleaseSigning) {
+            create("release") {
+                storeFile = file(releaseSigningProperties.getProperty("storeFile"))
+                storePassword = releaseSigningProperties.getProperty("storePassword")
+                keyAlias = releaseSigningProperties.getProperty("keyAlias")
+                keyPassword = releaseSigningProperties.getProperty("keyPassword")
+            }
+        }
     }
 
     buildTypes {
@@ -24,6 +50,9 @@ android {
             matchingFallbacks += listOf("debug")
         }
         release {
+            if (hasReleaseSigning) {
+                signingConfig = signingConfigs.getByName("release")
+            }
             isMinifyEnabled = false
             proguardFiles(getDefaultProguardFile("proguard-android-optimize.txt"), "proguard-rules.pro")
         }
