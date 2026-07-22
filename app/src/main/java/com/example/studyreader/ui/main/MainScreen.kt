@@ -124,7 +124,9 @@ import com.example.studyreader.theme.StudyPalette
 import com.example.studyreader.theme.StudyReaderTheme
 import java.util.Locale
 import java.util.concurrent.ConcurrentHashMap
+import kotlinx.coroutines.Deferred
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.async
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 
@@ -298,6 +300,7 @@ fun MainScreen(
   val currentSpeechProvider by rememberUpdatedState(speechProvider)
   val naturalVoiceClient = remember(context) { NaturalVoiceClient(context.cacheDir) }
   var naturalVoicePlayer by remember { mutableStateOf<MediaPlayer?>(null) }
+  val naturalVoicePrefetches = remember { ConcurrentHashMap<String, Deferred<java.io.File>>() }
   val mainHandler = remember { Handler(Looper.getMainLooper()) }
   val queuedSpeechRanges = remember { ConcurrentHashMap<String, QueuedSpeechRange>() }
   var speechHighlight by remember { mutableStateOf<ActiveSpeechHighlight?>(null) }
@@ -305,6 +308,15 @@ fun MainScreen(
   var currentSpeechSegment by remember { mutableIntStateOf(0) }
   var isSpeechPaused by remember { mutableStateOf(false) }
   var speechPlaybackGeneration by remember { mutableIntStateOf(0) }
+
+  LaunchedEffect(speechPlaybackGeneration) {
+    val activePrefix = "$speechPlaybackGeneration|"
+    naturalVoicePrefetches.entries
+      .filterNot { it.key.startsWith(activePrefix) }
+      .forEach { (key, request) ->
+        if (naturalVoicePrefetches.remove(key, request)) request.cancel()
+      }
+  }
 
   fun stopNaturalVoice() {
     naturalVoicePlayer?.let { player ->
@@ -446,6 +458,8 @@ fun MainScreen(
       engine.stop()
       engine.shutdown()
       stopNaturalVoice()
+      naturalVoicePrefetches.values.forEach { it.cancel() }
+      naturalVoicePrefetches.clear()
       queuedSpeechRanges.clear()
       speechEngine = null
     }
@@ -509,13 +523,33 @@ fun MainScreen(
     fun speakWithPhone(): Boolean {
       val engine = speechEngine ?: return false
       if (!speechReady) return false
+      val currentUtteranceId = "study-reader-${content.name}-$activeGeneration-$currentSpeechSegment"
+      if (queuedSpeechRanges.containsKey(currentUtteranceId)) return true
+
       stopNaturalVoice()
       engine.stop()
       queuedSpeechRanges.clear()
       engine.setSpeechRate(speechRate)
-      val utteranceId = "study-reader-${content.name}-$activeGeneration-$currentSpeechSegment"
-      queuedSpeechRanges[utteranceId] = queuedRange
-      return engine.speak(segment.text, TextToSpeech.QUEUE_FLUSH, null, utteranceId) == TextToSpeech.SUCCESS
+      var queuedAny = false
+      for (segmentIndex in currentSpeechSegment..speechSegments.lastIndex) {
+        val queuedSegment = speechSegments[segmentIndex]
+        val utteranceId = "study-reader-${content.name}-$activeGeneration-$segmentIndex"
+        queuedSpeechRanges[utteranceId] =
+          QueuedSpeechRange(
+            content = content,
+            startOffset = queuedSegment.startOffset,
+            endOffset = queuedSegment.endOffset,
+            segmentIndex = segmentIndex,
+            generation = activeGeneration,
+          )
+        val queueMode = if (queuedAny) TextToSpeech.QUEUE_ADD else TextToSpeech.QUEUE_FLUSH
+        if (engine.speak(queuedSegment.text, queueMode, null, utteranceId) != TextToSpeech.SUCCESS) {
+          queuedSpeechRanges.remove(utteranceId)
+          break
+        }
+        queuedAny = true
+      }
+      return queuedAny
     }
 
     if (speechProvider == SpeechProvider.Phone) {
@@ -532,14 +566,22 @@ fun MainScreen(
         range = TextHighlightRange(segment.startOffset, segment.endOffset),
       )
     speechMessage = "Preparing natural voice..."
-    val audioFile =
-      runCatching {
+    val naturalRequestKey =
+      "$activeGeneration|$currentSpeechSegment|$selectedNaturalVoiceName|$speechRate|${state.serverUrl}"
+    val audioRequest =
+      naturalVoicePrefetches.getOrPut(naturalRequestKey) {
+        uiScope.async(Dispatchers.IO) {
           naturalVoiceClient.synthesize(
             ollamaServerUrl = state.serverUrl,
             text = segment.text,
             voiceId = selectedNaturalVoiceName.toIntOrNull() ?: 3,
             speed = speechRate,
           )
+        }
+      }
+    val audioFile =
+      runCatching {
+          audioRequest.await()
         }
         .getOrElse {
           if (speakWithPhone()) {
@@ -595,6 +637,21 @@ fun MainScreen(
     }
     naturalVoicePlayer = player
     player.start()
+    val nextSegmentIndex = currentSpeechSegment + 1
+    speechSegments.getOrNull(nextSegmentIndex)?.let { nextSegment ->
+      val nextRequestKey =
+        "$activeGeneration|$nextSegmentIndex|$selectedNaturalVoiceName|$speechRate|${state.serverUrl}"
+      naturalVoicePrefetches.getOrPut(nextRequestKey) {
+        uiScope.async(Dispatchers.IO) {
+          naturalVoiceClient.synthesize(
+            ollamaServerUrl = state.serverUrl,
+            text = nextSegment.text,
+            voiceId = selectedNaturalVoiceName.toIntOrNull() ?: 3,
+            speed = speechRate,
+          )
+        }
+      }
+    }
     speechMessage = if (content == SpeechContent.StudyText) "Reading with natural voice" else "Reading AI with natural voice"
   }
 
