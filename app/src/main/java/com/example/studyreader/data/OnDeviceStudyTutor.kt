@@ -27,6 +27,9 @@ const val ON_DEVICE_MODEL_PAGE =
 private const val MINIMUM_MODEL_BYTES = 400L * 1024L * 1024L
 private const val COPY_BUFFER_BYTES = 1024 * 1024
 private const val STORAGE_HEADROOM_BYTES = 768L * 1024L * 1024L
+private const val ON_DEVICE_CPU_THREADS = 2
+private const val ON_DEVICE_MAX_TOKENS = 2_048
+private const val ON_DEVICE_MAX_STUDY_TEXT_CHARS = 4_000
 
 data class OnDeviceModelStatus(
   val installed: Boolean,
@@ -135,17 +138,21 @@ class OnDeviceStudyTutor(private val context: Context) : StudyTutor, AutoCloseab
   }
 
   override suspend fun explain(serverUrl: String, studyText: String): String =
-    generate(buildStudyPrompt(studyText), temperature = 0.2)
+    generate(buildStudyPrompt(validateOnDeviceStudyText(studyText)), temperature = 0.2)
 
   override suspend fun generateFlashcards(serverUrl: String, studyText: String): List<Flashcard> =
-    parseFlashcards(generate(buildOnDeviceFlashcardPrompt(studyText), temperature = 0.1))
+    parseFlashcards(generate(buildOnDeviceFlashcardPrompt(validateOnDeviceStudyText(studyText)), temperature = 0.1))
 
   override suspend fun askQuestion(
     serverUrl: String,
     studyText: String,
     history: List<TutorMessage>,
     question: String,
-  ): String = generate(buildTutorQuestionPrompt(studyText, history, question), temperature = 0.2)
+  ): String =
+    generate(
+      buildTutorQuestionPrompt(validateOnDeviceStudyText(studyText), history, question),
+      temperature = 0.2,
+    )
 
   private suspend fun generate(prompt: String, temperature: Double): String =
     withContext(Dispatchers.Default) {
@@ -173,7 +180,8 @@ class OnDeviceStudyTutor(private val context: Context) : StudyTutor, AutoCloseab
     return Engine(
       EngineConfig(
         modelPath = modelFile.absolutePath,
-        backend = Backend.CPU(),
+        backend = Backend.CPU(threadCount = ON_DEVICE_CPU_THREADS),
+        maxNumTokens = ON_DEVICE_MAX_TOKENS,
         cacheDir = cacheDirectory.absolutePath,
       ),
     ).also(Engine::initialize)
@@ -197,4 +205,12 @@ class OnDeviceStudyTutor(private val context: Context) : StudyTutor, AutoCloseab
   override fun close() {
     closeEngine()
   }
+}
+
+internal fun validateOnDeviceStudyText(studyText: String): String {
+  val cleanText = studyText.trim()
+  require(cleanText.length <= ON_DEVICE_MAX_STUDY_TEXT_CHARS) {
+    "Phone AI can process up to about 4,000 characters at a time. Shorten the text or choose Computer AI."
+  }
+  return cleanText
 }

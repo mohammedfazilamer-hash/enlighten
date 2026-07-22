@@ -124,9 +124,7 @@ import com.example.studyreader.theme.StudyPalette
 import com.example.studyreader.theme.StudyReaderTheme
 import java.util.Locale
 import java.util.concurrent.ConcurrentHashMap
-import kotlinx.coroutines.Deferred
 import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.async
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 
@@ -139,6 +137,7 @@ private const val SPEECH_PROVIDER_KEY = "speech_provider"
 private const val NATURAL_VOICE_NAME_KEY = "natural_voice_name"
 private const val PROFILE_IMAGE_URI_KEY = "profile_image_uri"
 private const val VOICE_PREVIEW_UTTERANCE_ID = "study-reader-voice-preview"
+private const val PHONE_SPEECH_QUEUE_WINDOW = 4
 
 private val NATURAL_VOICE_OPTIONS =
   listOf(
@@ -300,7 +299,6 @@ fun MainScreen(
   val currentSpeechProvider by rememberUpdatedState(speechProvider)
   val naturalVoiceClient = remember(context) { NaturalVoiceClient(context.cacheDir) }
   var naturalVoicePlayer by remember { mutableStateOf<MediaPlayer?>(null) }
-  val naturalVoicePrefetches = remember { ConcurrentHashMap<String, Deferred<java.io.File>>() }
   val mainHandler = remember { Handler(Looper.getMainLooper()) }
   val queuedSpeechRanges = remember { ConcurrentHashMap<String, QueuedSpeechRange>() }
   var speechHighlight by remember { mutableStateOf<ActiveSpeechHighlight?>(null) }
@@ -308,15 +306,6 @@ fun MainScreen(
   var currentSpeechSegment by remember { mutableIntStateOf(0) }
   var isSpeechPaused by remember { mutableStateOf(false) }
   var speechPlaybackGeneration by remember { mutableIntStateOf(0) }
-
-  LaunchedEffect(speechPlaybackGeneration) {
-    val activePrefix = "$speechPlaybackGeneration|"
-    naturalVoicePrefetches.entries
-      .filterNot { it.key.startsWith(activePrefix) }
-      .forEach { (key, request) ->
-        if (naturalVoicePrefetches.remove(key, request)) request.cancel()
-      }
-  }
 
   fun stopNaturalVoice() {
     naturalVoicePlayer?.let { player ->
@@ -340,6 +329,9 @@ fun MainScreen(
           speechSegments = emptyList()
           currentSpeechSegment = 0
           speechMessage = "Study text finished. Preparing AI explanation..."
+          if (state.explanation.isBlank() && !state.isExplaining) {
+            screenViewModel.explain()
+          }
         } else {
           narrationPhase = NarrationPhase.Idle
           speechSegments = emptyList()
@@ -458,8 +450,6 @@ fun MainScreen(
       engine.stop()
       engine.shutdown()
       stopNaturalVoice()
-      naturalVoicePrefetches.values.forEach { it.cancel() }
-      naturalVoicePrefetches.clear()
       queuedSpeechRanges.clear()
       speechEngine = null
     }
@@ -475,7 +465,12 @@ fun MainScreen(
   ) {
     if (narrationPhase != NarrationPhase.WaitingForExplanation) return@LaunchedEffect
 
-    val explanationSegments = splitTextForSpeechSegments(state.explanation)
+    val explanationSegments =
+      if (speechProvider == SpeechProvider.NaturalLocal) {
+        splitTextForNaturalVoiceSegments(state.explanation)
+      } else {
+        splitTextForSpeechSegments(state.explanation)
+      }
     val playbackReady = speechProvider == SpeechProvider.NaturalLocal || (speechEngine != null && speechReady)
     if (explanationSegments.isNotEmpty() && playbackReady) {
       narrationPhase = NarrationPhase.ReadingExplanation
@@ -531,7 +526,9 @@ fun MainScreen(
       queuedSpeechRanges.clear()
       engine.setSpeechRate(speechRate)
       var queuedAny = false
-      for (segmentIndex in currentSpeechSegment..speechSegments.lastIndex) {
+      val queueEnd =
+        (currentSpeechSegment + PHONE_SPEECH_QUEUE_WINDOW - 1).coerceAtMost(speechSegments.lastIndex)
+      for (segmentIndex in currentSpeechSegment..queueEnd) {
         val queuedSegment = speechSegments[segmentIndex]
         val utteranceId = "study-reader-${content.name}-$activeGeneration-$segmentIndex"
         queuedSpeechRanges[utteranceId] =
@@ -566,11 +563,8 @@ fun MainScreen(
         range = TextHighlightRange(segment.startOffset, segment.endOffset),
       )
     speechMessage = "Preparing natural voice..."
-    val naturalRequestKey =
-      "$activeGeneration|$currentSpeechSegment|$selectedNaturalVoiceName|$speechRate|${state.serverUrl}"
-    val audioRequest =
-      naturalVoicePrefetches.getOrPut(naturalRequestKey) {
-        uiScope.async(Dispatchers.IO) {
+    val audioFile =
+      runCatching {
           naturalVoiceClient.synthesize(
             ollamaServerUrl = state.serverUrl,
             text = segment.text,
@@ -578,14 +572,11 @@ fun MainScreen(
             speed = speechRate,
           )
         }
-      }
-    val audioFile =
-      runCatching {
-          audioRequest.await()
-        }
         .getOrElse {
           if (speakWithPhone()) {
-            speechMessage = "Natural voice unavailable. Using phone voice."
+            speechProvider = SpeechProvider.Phone
+            preferences.edit().putString(SPEECH_PROVIDER_KEY, SpeechProvider.Phone.name).apply()
+            speechMessage = "Natural voice unavailable. Switched to phone voice."
           } else {
             narrationPhase = NarrationPhase.Idle
             autoReadRequested = false
@@ -637,21 +628,6 @@ fun MainScreen(
     }
     naturalVoicePlayer = player
     player.start()
-    val nextSegmentIndex = currentSpeechSegment + 1
-    speechSegments.getOrNull(nextSegmentIndex)?.let { nextSegment ->
-      val nextRequestKey =
-        "$activeGeneration|$nextSegmentIndex|$selectedNaturalVoiceName|$speechRate|${state.serverUrl}"
-      naturalVoicePrefetches.getOrPut(nextRequestKey) {
-        uiScope.async(Dispatchers.IO) {
-          naturalVoiceClient.synthesize(
-            ollamaServerUrl = state.serverUrl,
-            text = nextSegment.text,
-            voiceId = selectedNaturalVoiceName.toIntOrNull() ?: 3,
-            speed = speechRate,
-          )
-        }
-      }
-    }
     speechMessage = if (content == SpeechContent.StudyText) "Reading with natural voice" else "Reading AI with natural voice"
   }
 
@@ -839,7 +815,12 @@ fun MainScreen(
       preferences.edit().putBoolean(AUTO_READ_EXPLANATION_KEY, enabled).apply()
     },
     onRead = {
-      val segments = splitTextForSpeechSegments(state.studyText)
+      val segments =
+        if (speechProvider == SpeechProvider.NaturalLocal) {
+          splitTextForNaturalVoiceSegments(state.studyText)
+        } else {
+          splitTextForSpeechSegments(state.studyText)
+        }
       val engine = speechEngine
       val playbackReady = speechProvider == SpeechProvider.NaturalLocal || (engine != null && speechReady)
       if (playbackReady && segments.isNotEmpty()) {
@@ -853,9 +834,6 @@ fun MainScreen(
         currentSpeechSegment = 0
         isSpeechPaused = false
         speechPlaybackGeneration++
-        if (autoReadExplanation && state.explanation.isBlank() && !state.isExplaining) {
-          screenViewModel.explain()
-        }
         speechMessage =
           if (autoReadExplanation) {
             "Reading study text and preparing AI explanation"

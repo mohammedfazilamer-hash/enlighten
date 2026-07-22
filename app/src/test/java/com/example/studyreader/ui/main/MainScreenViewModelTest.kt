@@ -8,6 +8,7 @@ import com.example.studyreader.data.deriveStudySetTitle
 import com.example.studyreader.data.extractDocxText
 import com.example.studyreader.data.normalizeOllamaBaseUrl
 import com.example.studyreader.data.providerOrder
+import com.example.studyreader.data.validateOnDeviceStudyText
 import com.example.studyreader.data.TutorMessage
 import com.example.studyreader.data.TutorMessageRole
 import java.io.ByteArrayInputStream
@@ -41,6 +42,11 @@ class MainScreenViewModelTest {
       listOf(AiExecutionProvider.Computer),
       providerOrder(AiProviderMode.Automatic, onDeviceModelInstalled = false),
     )
+  }
+
+  @Test(expected = IllegalArgumentException::class)
+  fun validateOnDeviceStudyText_rejectsPassagesThatWouldOverloadPhoneInference() {
+    validateOnDeviceStudyText("a".repeat(4_001))
   }
 
   @Test
@@ -82,6 +88,16 @@ class MainScreenViewModelTest {
 
     assertEquals(listOf("First sentence.", "Second sentence!", "Third question?"), segments.map { it.text })
     assertTrue(segments.all { source.substring(it.startOffset, it.endOffset) == it.text })
+  }
+
+  @Test
+  fun splitTextForNaturalVoiceSegments_groupsShortSentencesForSmoothPlayback() {
+    val source = "First short sentence. Second short sentence! Third short sentence?"
+    val segments = splitTextForNaturalVoiceSegments(source, targetLength = 100)
+
+    assertEquals(1, segments.size)
+    assertEquals(source, segments.single().text)
+    assertEquals(source, source.substring(segments.single().startOffset, segments.single().endOffset))
   }
 
   @Test

@@ -98,8 +98,8 @@ class NaturalVoiceClient(private val cacheDirectory: File) {
 
   private fun openConnection(url: String, method: String): HttpURLConnection =
     (URL(url).openConnection() as HttpURLConnection).apply {
-      connectTimeout = 10_000
-      readTimeout = 120_000
+      connectTimeout = 5_000
+      readTimeout = 45_000
       requestMethod = method
       setRequestProperty("Accept", if (method == "GET") "application/json" else "audio/wav")
     }

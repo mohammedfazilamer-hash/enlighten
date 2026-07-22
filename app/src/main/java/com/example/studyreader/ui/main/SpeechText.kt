@@ -73,3 +73,38 @@ fun splitTextForSpeechSegments(text: String, maxLength: Int = 900): List<SpeechC
   }
   return segments
 }
+
+fun splitTextForNaturalVoiceSegments(
+  text: String,
+  maxLength: Int = 900,
+  targetLength: Int = 320,
+): List<SpeechChunk> {
+  require(maxLength > 0)
+  require(targetLength in 1..maxLength)
+  val sentences = splitTextForSpeechSegments(text, maxLength)
+  if (sentences.isEmpty()) return emptyList()
+
+  val groups = mutableListOf<SpeechChunk>()
+  var sentenceIndex = 0
+  while (sentenceIndex < sentences.size) {
+    val startOffset = sentences[sentenceIndex].startOffset
+    var endOffset = sentences[sentenceIndex].endOffset
+    var nextIndex = sentenceIndex + 1
+    while (
+      nextIndex < sentences.size &&
+        endOffset - startOffset < targetLength &&
+        sentences[nextIndex].endOffset - startOffset <= maxLength
+    ) {
+      endOffset = sentences[nextIndex].endOffset
+      nextIndex++
+    }
+    groups +=
+      SpeechChunk(
+        text = text.substring(startOffset, endOffset),
+        startOffset = startOffset,
+        endOffset = endOffset,
+      )
+    sentenceIndex = nextIndex
+  }
+  return groups
+}
