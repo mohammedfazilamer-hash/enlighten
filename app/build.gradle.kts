@@ -60,6 +60,9 @@ dependencies {
   // Bundled on-device OCR; the model works without a network download.
   implementation(libs.mlkit.text.recognition)
 
+  // Local language-model inference. Model weights are imported separately.
+  implementation(libs.litert.lm.android)
+
   // Compose
   implementation(libs.androidx.compose.ui)
   implementation(libs.androidx.compose.ui.tooling.preview)

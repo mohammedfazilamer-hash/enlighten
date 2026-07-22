@@ -5,6 +5,7 @@ import java.net.URI
 import java.net.URL
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
+import org.json.JSONArray
 import org.json.JSONObject
 
 const val DEFAULT_OLLAMA_URL = "http://192.168.1.100:11434"
@@ -170,6 +171,20 @@ fun buildFlashcardPrompt(studyText: String): String =
   ${studyText.trim()}
   """.trimIndent()
 
+fun buildOnDeviceFlashcardPrompt(studyText: String): String =
+  """
+  Create exactly 6 useful study flashcards using only the study text below.
+  Test the most important ideas. Keep each answer short and factually grounded in the text.
+
+  Write exactly one flashcard per line in this format:
+  Q: Question | A: Answer
+
+  Do not add an introduction, numbering, Markdown, or JSON.
+
+  Study text:
+  ${studyText.trim()}
+  """.trimIndent()
+
 fun buildTutorQuestionPrompt(
   studyText: String,
   history: List<TutorMessage>,
@@ -198,28 +213,65 @@ fun buildTutorQuestionPrompt(
 
 internal fun parseFlashcards(response: String): List<Flashcard> {
   val raw = response.trim().removePrefix("```json").removePrefix("```").removeSuffix("```").trim()
-  val payload = runCatching { JSONObject(raw) }.getOrElse {
-    val objectStart = raw.indexOf('{')
-    val objectEnd = raw.lastIndexOf('}')
-    if (objectStart < 0 || objectEnd <= objectStart) {
-      throw IllegalStateException("The tutor returned flashcards in an unreadable format.")
-    }
-    JSONObject(raw.substring(objectStart, objectEnd + 1))
+  val flashcards = parseJsonFlashcards(raw).ifEmpty { parsePlainTextFlashcards(raw) }
+  return flashcards.take(10).ifEmpty {
+    throw IllegalStateException("The tutor did not return any usable flashcards.")
   }
-  val array = payload.optJSONArray("flashcards")
-    ?: throw IllegalStateException("The tutor did not return any flashcards.")
-  val flashcards =
+}
+
+private fun parseJsonFlashcards(raw: String): List<Flashcard> =
+  runCatching {
+    val array =
+      if (raw.startsWith("[")) {
+        JSONArray(raw)
+      } else {
+        val objectStart = raw.indexOf('{')
+        val objectEnd = raw.lastIndexOf('}')
+        if (objectStart < 0 || objectEnd <= objectStart) return@runCatching emptyList()
+        val payload = JSONObject(raw.substring(objectStart, objectEnd + 1))
+        val arrayKey = payload.keys().asSequence().firstOrNull {
+          it.equals("flashcards", ignoreCase = true) || it.equals("cards", ignoreCase = true)
+        } ?: return@runCatching emptyList()
+        payload.optJSONArray(arrayKey) ?: return@runCatching emptyList()
+      }
     buildList {
       for (index in 0 until array.length()) {
         val card = array.optJSONObject(index) ?: continue
-        val question = card.optString("question").trim()
-        val answer = card.optString("answer").trim()
+        val question = card.stringValueIgnoringCase("question")
+        val answer = card.stringValueIgnoringCase("answer")
         if (question.isNotBlank() && answer.isNotBlank()) {
           add(Flashcard(question = question, answer = answer))
         }
       }
     }
-  return flashcards.take(10).ifEmpty {
-    throw IllegalStateException("The tutor did not return any usable flashcards.")
+  }.getOrDefault(emptyList())
+
+private fun parsePlainTextFlashcards(raw: String): List<Flashcard> {
+  val questionLabel = Regex("(?i)^\\s*(?:[-*]\\s*)?(?:\\d+[.)]\\s*)?(?:question|q)\\s*\\d*\\s*[:.-]\\s*(.+?)\\s*$")
+  val answerLabel = Regex("(?i)^\\s*(?:[-*]\\s*)?(?:answer|a)\\s*\\d*\\s*[:.-]\\s*(.+?)\\s*$")
+  val inlinePair = Regex("(?i)^\\s*(?:[-*]\\s*)?(?:\\d+[.)]\\s*)?(?:question|q)\\s*\\d*\\s*[:.-]\\s*(.+?)\\s*\\|\\s*(?:answer|a)\\s*\\d*\\s*[:.-]\\s*(.+?)\\s*$")
+  val cards = mutableListOf<Flashcard>()
+  var pendingQuestion: String? = null
+  raw.lineSequence().forEach { line ->
+    val trimmed = line.trim().trim('*', '`')
+    val inline = inlinePair.matchEntire(trimmed)
+    when {
+      inline != null -> {
+        cards += Flashcard(question = inline.groupValues[1].trim(), answer = inline.groupValues[2].trim())
+        pendingQuestion = null
+      }
+      questionLabel.matches(trimmed) -> pendingQuestion = questionLabel.matchEntire(trimmed)?.groupValues?.get(1)?.trim()
+      answerLabel.matches(trimmed) && !pendingQuestion.isNullOrBlank() -> {
+        val answer = answerLabel.matchEntire(trimmed)?.groupValues?.get(1)?.trim().orEmpty()
+        if (answer.isNotBlank()) cards += Flashcard(question = pendingQuestion.orEmpty(), answer = answer)
+        pendingQuestion = null
+      }
+    }
   }
+  return cards
+}
+
+private fun JSONObject.stringValueIgnoringCase(name: String): String {
+  val key = keys().asSequence().firstOrNull { it.equals(name, ignoreCase = true) } ?: return ""
+  return optString(key).trim()
 }

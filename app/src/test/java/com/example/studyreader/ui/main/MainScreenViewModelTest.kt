@@ -2,9 +2,12 @@ package com.example.studyreader.ui.main
 
 import com.example.studyreader.data.buildStudyPrompt
 import com.example.studyreader.data.buildTutorQuestionPrompt
+import com.example.studyreader.data.AiExecutionProvider
+import com.example.studyreader.data.AiProviderMode
 import com.example.studyreader.data.deriveStudySetTitle
 import com.example.studyreader.data.extractDocxText
 import com.example.studyreader.data.normalizeOllamaBaseUrl
+import com.example.studyreader.data.providerOrder
 import com.example.studyreader.data.TutorMessage
 import com.example.studyreader.data.TutorMessageRole
 import java.io.ByteArrayInputStream
@@ -16,6 +19,30 @@ import org.junit.Assert.assertTrue
 import org.junit.Test
 
 class MainScreenViewModelTest {
+  @Test
+  fun providerOrder_autoPrefersInstalledPhoneModelAndKeepsComputerFallback() {
+    assertEquals(
+      listOf(AiExecutionProvider.OnDevice, AiExecutionProvider.Computer),
+      providerOrder(AiProviderMode.Automatic, onDeviceModelInstalled = true),
+    )
+  }
+
+  @Test
+  fun providerOrder_phoneModeNeverSendsStudyTextToComputer() {
+    assertEquals(
+      listOf(AiExecutionProvider.OnDevice),
+      providerOrder(AiProviderMode.OnDevice, onDeviceModelInstalled = false),
+    )
+  }
+
+  @Test
+  fun providerOrder_autoUsesComputerUntilPhoneModelIsInstalled() {
+    assertEquals(
+      listOf(AiExecutionProvider.Computer),
+      providerOrder(AiProviderMode.Automatic, onDeviceModelInstalled = false),
+    )
+  }
+
   @Test
   fun normalizeOllamaBaseUrl_addsSchemeAndRemovesTrailingSlash() {
     assertEquals("http://10.0.0.42:11434", normalizeOllamaBaseUrl("10.0.0.42:11434/"))

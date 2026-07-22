@@ -8,7 +8,7 @@
 
 Enlighten is a local-first Android study companion. It extracts text from screenshots, camera photos, PDFs, DOCX files, and TXT files; reads the material aloud with live highlighting; and turns it into a simpler explanation, flashcards, quiz prompts, and a passage-grounded tutor conversation.
 
-The application was built with Codex powered by GPT-5.6 (`gpt-5.6-sol`) for the OpenAI Build Week Education track. It uses Android services on the phone and a free local Ollama model on the student's computer. There is no paid inference API, account, or cloud application backend.
+The application was built with Codex powered by GPT-5.6 (`gpt-5.6-sol`) for the OpenAI Build Week Education track. It can run Gemma 3 1B directly on a compatible Android phone through LiteRT-LM, with a free local Ollama model on the student's computer as an optional higher-quality provider. There is no paid inference API, account, or cloud application backend.
 
 ![Enlighten highlighting a photosynthesis passage while reading](docs/media/live-reading.png)
 
@@ -38,8 +38,10 @@ Enlighten brings that workflow into one Android app:
 | Explanations | Simple explanation, important terms, key points, and quiz questions |
 | Study tools | Six editable flashcards and a self-check quiz mode |
 | Ask Tutor | Passage-grounded follow-up questions with recent conversation context |
+| AI providers | Auto, private on-device Gemma 3 1B, or optional computer Ollama mode |
 | Library | Save, open, rename, update, and delete complete study sets |
 | Personalization | Persistent profile image, four color palettes, system dark mode, voice, and speed settings |
+| Natural narration | Optional Kokoro neural voices generated locally with Android TTS fallback |
 
 ## Architecture
 
@@ -49,12 +51,16 @@ flowchart LR
     Picker[Camera, photo, and document pickers] --> App
     App --> OCR[Bundled ML Kit OCR]
     App --> TTS[Android TextToSpeech]
+    App --> AI[AI provider coordinator]
+    AI -->|Default when installed| PhoneModel[Gemma 3 1B int4 via LiteRT-LM]
+    AI -->|Optional private Wi-Fi HTTP| Ollama[Ollama on the student's computer]
+    Ollama --> PCModel[llama3.2:3b Q4_K_M]
+    App -->|Optional private Wi-Fi HTTP| Voice[Kokoro voice service]
     App --> Storage[Private local storage]
-    App -->|Private Wi-Fi HTTP| Ollama[Ollama on the student's computer]
-    Ollama --> Model[llama3.2:3b Q4_K_M]
+    Voice --> Kokoro[Kokoro 82M]
 ```
 
-The phone owns the interface, OCR, document processing, speech, and saved study sets. AI prompts go only to the Ollama instance configured by the student. The current model is `llama3.2:3b`, a roughly 2 GB quantized local model selected because it runs quickly on consumer hardware while producing useful study explanations.
+The phone owns the interface, OCR, document processing, playback, saved study sets, and the default AI runtime. **Phone** mode runs the 584 MB `gemma3-1b-it-int4.litertlm` model entirely in private app storage and never sends study text to the computer. **Auto** prefers the installed phone model and falls back to Ollama if phone inference fails. **Computer** uses `llama3.2:3b`, a roughly 2 GB quantized model, for stronger answers when the student's PC is reachable. Optional natural narration sends one sentence at a time to Kokoro on that computer and caches the returned WAV audio in Android's cache.
 
 ## Technology
 
@@ -63,7 +69,9 @@ The phone owns the interface, OCR, document processing, speech, and saved study 
 - AndroidX Lifecycle and Navigation 3
 - Bundled ML Kit Text Recognition 16.0.1
 - Android `TextToSpeech`, `PdfRenderer`, Activity Result APIs, and Storage Access Framework
+- Kokoro `kokoro-en-v0_19` through sherpa-onnx 1.13.4
 - Kotlin coroutines and `StateFlow`
+- LiteRT-LM 0.14.0 with Gemma 3 1B instruction-tuned int4 inference on Android CPU
 - Ollama `/api/generate` with `llama3.2:3b`
 - Atomic private-file persistence for study sets and profile images
 
@@ -74,20 +82,37 @@ See [TECHNICAL_REPORT.md](TECHNICAL_REPORT.md) for the full architecture, API, p
 ### Requirements
 
 - Android 8.0 or newer
-- Windows computer with Android Studio and SDK 36
-- Ollama with `llama3.2:3b`
-- Phone and computer on the same trusted Wi-Fi network for AI features
+- Android Studio and SDK 36 for development builds
+- Approximately 1.4 GB of free phone storage while importing the 584 MB Gemma model
+- Optional: Windows computer with Ollama and `llama3.2:3b`
+- Python 3.10 or newer for optional natural narration
+- Phone and computer on the same trusted Wi-Fi only when using Ollama or Kokoro
 
-### 1. Start the local model
+### 1. Install phone AI
+
+Open **Settings > AI tutor**, tap **Get model**, accept the Gemma license on Hugging Face, and download `gemma3-1b-it-int4.litertlm`. Tap **Import** and select the downloaded file. When the status reads **Ready offline**, choose **Phone** for strict on-device processing or **Auto** to keep the computer fallback.
+
+The model is copied into private no-backup app storage. The original file in Downloads can be removed after a successful import if space is needed.
+
+### 2. Install the optional natural voice
+
+```powershell
+./install-local-voice.ps1
+```
+
+The installer stores the roughly 340 MB Kokoro model under `%LOCALAPPDATA%\Enlighten\tts`, outside OneDrive and outside the Git repository.
+
+### 3. Start the optional computer services
 
 ```powershell
 ollama pull llama3.2:3b
-./start-ollama.ps1
+./configure-enlighten-firewall.ps1
+./start-enlighten-services.ps1
 ```
 
-The helper starts Ollama on port `11434`. Use it only on a trusted private network. Do not forward that port from the router.
+Run the firewall script from an Administrator PowerShell window when setting up a computer for the first time. The service helper starts Ollama on port `11434` and the optional natural voice service on port `11435`. Use them only on a trusted private network. Do not forward either port from the router.
 
-### 2. Find the computer address
+### 4. Find the computer address
 
 Run `ipconfig`, find the active Wi-Fi IPv4 address, and enter this in Enlighten:
 
@@ -97,14 +122,14 @@ http://YOUR_COMPUTER_IP:11434
 
 For example, a private home address may look like `http://192.168.1.100:11434`.
 
-### 3. Build and test
+### 5. Build and test
 
 ```powershell
 $env:JAVA_HOME='C:\Program Files\Android\Android Studio\jbr'
 ./gradlew.bat testDebugUnitTest lintDebug assembleDebug --no-parallel --no-configuration-cache
 ```
 
-### 4. Install on Android
+### 6. Install on Android
 
 Enable Developer options and USB debugging, connect the phone, then run:
 
@@ -113,7 +138,7 @@ adb devices
 ./gradlew.bat installDebug --no-parallel --no-configuration-cache
 ```
 
-Open Enlighten, enter the computer address, and tap **Test connection**. OCR, TTS, the local library, and saved settings work on the phone without the computer. Explanation, card generation, and Ask Tutor currently require the configured Ollama computer.
+Open Enlighten and import the phone model for fully offline explanations, card generation, and Ask Tutor. To use Ollama, choose **Computer**, enter the computer address, and tap **Test connection**. Choose **Natural local** under Settings to use Kokoro; the app derives port `11435` from the same computer address. OCR, Android voice, saved study sets, and on-device Gemma work without the computer or Wi-Fi.
 
 Android build output is intentionally redirected to `%USERPROFILE%\.gradle\studyreader-build\StudyReader` because OneDrive can lock short-lived Gradle intermediates.
 
@@ -126,8 +151,11 @@ A prepared passage and exact demo flow are available in [submission/DEMO_DATA.md
 - Images and documents are processed on the phone.
 - Study sets and profile images are stored in the app's private files.
 - No API key, account, analytics SDK, or cloud AI service is used.
-- AI text travels over the local network to the user-configured Ollama computer.
-- The prototype uses cleartext HTTP on the private LAN and must not be exposed to the public internet.
+- In Phone mode, AI text stays on the phone and Gemma runs in private app storage.
+- In Auto mode, the app may send AI text to the configured Ollama computer only if phone inference fails.
+- In Computer mode, AI text travels over the local network to the user-configured Ollama computer.
+- Natural narration sends sentence text to the user-owned Kokoro service and caches only generated audio in Android's cache.
+- The prototype uses cleartext HTTP on the private LAN and must not expose ports `11434` or `11435` to the public internet.
 
 ## How Codex Helped
 
@@ -139,11 +167,13 @@ The Build Week task metadata confirmed the model as `gpt-5.6-sol`. The submitted
 
 ## Current Limitations
 
-- Local AI requires network access to a computer running Ollama.
+- The 1B phone model is less capable and occasionally less precise than the optional 3B computer model.
+- On-device inference uses roughly 1 GB of RAM and may warm the phone during repeated generations.
+- Natural local narration requires the Kokoro service; Android TTS remains the automatic fallback.
 - OCR currently uses the bundled Latin-script recognizer.
 - Long documents need token-aware chunking before reliable whole-document AI synthesis.
 - The current distributable is a debug build, not a Play Store release.
-- Ollama is unauthenticated cleartext HTTP in the MVP and should remain on a trusted private network.
+- Ollama and Kokoro are unauthenticated cleartext HTTP services in the MVP and should remain on a trusted private network.
 
 ## Roadmap
 
@@ -151,8 +181,8 @@ The Build Week task metadata confirmed the model as `gpt-5.6-sol`. The submitted
 - Reject stale AI responses when the active passage changes.
 - Migrate study sets to Room and settings to DataStore.
 - Add persistent mastery and spaced repetition.
-- Add an on-device AI provider for compatible Android phones.
-- Keep Ollama as an optional higher-quality local provider.
+- Add token streaming, cancellation, and Android GPU/NPU acceleration for phone inference.
+- Improve small-model grounding and add source-linked answers for long documents.
 
 ## Build Week Submission
 

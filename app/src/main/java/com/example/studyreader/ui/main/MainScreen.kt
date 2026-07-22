@@ -1,6 +1,7 @@
 package com.example.studyreader.ui.main
 
 import android.content.Intent
+import android.media.MediaPlayer
 import android.net.Uri
 import android.os.Handler
 import android.os.Looper
@@ -80,6 +81,7 @@ import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
@@ -107,9 +109,14 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.example.studyreader.data.DEFAULT_OLLAMA_URL
 import com.example.studyreader.data.AndroidDocumentTextExtractor
+import com.example.studyreader.data.AiProviderMode
 import com.example.studyreader.data.FileStudySetStore
 import com.example.studyreader.data.MlKitScreenshotTextExtractor
+import com.example.studyreader.data.NaturalVoiceClient
 import com.example.studyreader.data.OllamaClient
+import com.example.studyreader.data.OnDeviceStudyTutor
+import com.example.studyreader.data.ON_DEVICE_MODEL_NAME
+import com.example.studyreader.data.ON_DEVICE_MODEL_PAGE
 import com.example.studyreader.data.ProfileImageStore
 import com.example.studyreader.data.createCameraImageUri
 import com.example.studyreader.data.deleteCameraImage
@@ -117,14 +124,27 @@ import com.example.studyreader.theme.StudyPalette
 import com.example.studyreader.theme.StudyReaderTheme
 import java.util.Locale
 import java.util.concurrent.ConcurrentHashMap
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 
 private const val PREFERENCES_NAME = "study_reader"
 private const val SERVER_URL_KEY = "ollama_server_url"
+private const val AI_PROVIDER_KEY = "ai_provider"
 private const val AUTO_READ_EXPLANATION_KEY = "auto_read_explanation"
 private const val VOICE_NAME_KEY = "tts_voice_name"
+private const val SPEECH_PROVIDER_KEY = "speech_provider"
+private const val NATURAL_VOICE_NAME_KEY = "natural_voice_name"
 private const val PROFILE_IMAGE_URI_KEY = "profile_image_uri"
 private const val VOICE_PREVIEW_UTTERANCE_ID = "study-reader-voice-preview"
+
+private val NATURAL_VOICE_OPTIONS =
+  listOf(
+    VoiceOption("2", "Nicole - natural female"),
+    VoiceOption("3", "Sarah - natural female"),
+    VoiceOption("6", "Michael - natural male"),
+    VoiceOption("10", "Lewis - natural male"),
+  )
 
 private enum class NarrationPhase {
   Idle,
@@ -173,12 +193,18 @@ fun MainScreen(
   val screenViewModel: MainScreenViewModel =
     viewModel {
       MainScreenViewModel(
-        studyTutor = OllamaClient(),
+        computerTutor = OllamaClient(),
+        onDeviceTutor = OnDeviceStudyTutor(context.applicationContext),
         screenshotTextExtractor = MlKitScreenshotTextExtractor(context.applicationContext),
         documentTextExtractor = AndroidDocumentTextExtractor(context.applicationContext),
         studySetStore = FileStudySetStore(context.applicationContext),
         initialServerUrl = preferences.getString(SERVER_URL_KEY, DEFAULT_OLLAMA_URL) ?: DEFAULT_OLLAMA_URL,
+        initialAiProviderMode =
+          AiProviderMode.entries.firstOrNull {
+            it.name == preferences.getString(AI_PROVIDER_KEY, AiProviderMode.Automatic.name)
+          } ?: AiProviderMode.Automatic,
         saveServerUrl = { preferences.edit().putString(SERVER_URL_KEY, it).apply() },
+        saveAiProviderMode = { preferences.edit().putString(AI_PROVIDER_KEY, it.name).apply() },
       )
     }
   val state by screenViewModel.uiState.collectAsStateWithLifecycle()
@@ -189,6 +215,10 @@ fun MainScreen(
   val documentPicker =
     rememberLauncherForActivityResult(OpenDocument()) { documentUri ->
       documentUri?.let(screenViewModel::importDocument)
+    }
+  val modelPicker =
+    rememberLauncherForActivityResult(OpenDocument()) { modelUri ->
+      modelUri?.let(screenViewModel::importOnDeviceModel)
     }
   var pendingCameraUri by rememberSaveable { mutableStateOf<String?>(null) }
   val cameraLauncher =
@@ -258,6 +288,16 @@ fun MainScreen(
   var selectedVoiceName by remember {
     mutableStateOf(preferences.getString(VOICE_NAME_KEY, null))
   }
+  var speechProvider by remember {
+    val savedProvider = preferences.getString(SPEECH_PROVIDER_KEY, SpeechProvider.Phone.name)
+    mutableStateOf(SpeechProvider.entries.firstOrNull { it.name == savedProvider } ?: SpeechProvider.Phone)
+  }
+  var selectedNaturalVoiceName by remember {
+    mutableStateOf(preferences.getString(NATURAL_VOICE_NAME_KEY, "3") ?: "3")
+  }
+  val currentSpeechProvider by rememberUpdatedState(speechProvider)
+  val naturalVoiceClient = remember(context) { NaturalVoiceClient(context.cacheDir) }
+  var naturalVoicePlayer by remember { mutableStateOf<MediaPlayer?>(null) }
   val mainHandler = remember { Handler(Looper.getMainLooper()) }
   val queuedSpeechRanges = remember { ConcurrentHashMap<String, QueuedSpeechRange>() }
   var speechHighlight by remember { mutableStateOf<ActiveSpeechHighlight?>(null) }
@@ -265,6 +305,47 @@ fun MainScreen(
   var currentSpeechSegment by remember { mutableIntStateOf(0) }
   var isSpeechPaused by remember { mutableStateOf(false) }
   var speechPlaybackGeneration by remember { mutableIntStateOf(0) }
+
+  fun stopNaturalVoice() {
+    naturalVoicePlayer?.let { player ->
+      runCatching { player.stop() }
+      player.release()
+    }
+    naturalVoicePlayer = null
+  }
+
+  fun completeSpeechSegment(completedRange: QueuedSpeechRange) {
+    if (completedRange.generation != speechPlaybackGeneration || isSpeechPaused) return
+    if (completedRange.segmentIndex < speechSegments.lastIndex) {
+      currentSpeechSegment = completedRange.segmentIndex + 1
+      return
+    }
+    when (completedRange.content) {
+      SpeechContent.StudyText -> {
+        speechHighlight = null
+        if (autoReadRequested) {
+          narrationPhase = NarrationPhase.WaitingForExplanation
+          speechSegments = emptyList()
+          currentSpeechSegment = 0
+          speechMessage = "Study text finished. Preparing AI explanation..."
+        } else {
+          narrationPhase = NarrationPhase.Idle
+          speechSegments = emptyList()
+          speechMessage = "Finished reading"
+        }
+      }
+
+      SpeechContent.Explanation -> {
+        narrationPhase = NarrationPhase.Idle
+        autoReadRequested = false
+        isSpeechPaused = false
+        speechSegments = emptyList()
+        speechHighlight = null
+        queuedSpeechRanges.clear()
+        speechMessage = "Finished reading study text and AI explanation"
+      }
+    }
+  }
 
   DisposableEffect(context) {
     lateinit var engine: TextToSpeech
@@ -284,7 +365,14 @@ fun MainScreen(
         if (status == TextToSpeech.SUCCESS) {
           val languageResult = engine.setLanguage(Locale.getDefault())
           speechReady = languageResult != TextToSpeech.LANG_MISSING_DATA && languageResult != TextToSpeech.LANG_NOT_SUPPORTED
-          speechMessage = if (speechReady) "Phone voice ready" else "Your phone voice does not support this language"
+          speechMessage =
+            if (currentSpeechProvider == SpeechProvider.NaturalLocal) {
+              "Natural local voice selected"
+            } else if (speechReady) {
+              "Phone voice ready"
+            } else {
+              "Your phone voice does not support this language"
+            }
           val installedOfflineVoices =
             engine.voices.orEmpty()
               .filterNot(Voice::isNetworkConnectionRequired)
@@ -338,36 +426,7 @@ fun MainScreen(
           }
           val completedRange = utteranceId?.let(queuedSpeechRanges::remove) ?: return
           mainHandler.post {
-            if (completedRange.generation != speechPlaybackGeneration || isSpeechPaused) return@post
-            if (completedRange.segmentIndex < speechSegments.lastIndex) {
-              currentSpeechSegment = completedRange.segmentIndex + 1
-            } else {
-              when (completedRange.content) {
-                SpeechContent.StudyText -> {
-                  speechHighlight = null
-                  if (autoReadRequested) {
-                    narrationPhase = NarrationPhase.WaitingForExplanation
-                    speechSegments = emptyList()
-                    currentSpeechSegment = 0
-                    speechMessage = "Study text finished. Preparing AI explanation..."
-                  } else {
-                    narrationPhase = NarrationPhase.Idle
-                    speechSegments = emptyList()
-                    speechMessage = "Finished reading"
-                  }
-                }
-
-                SpeechContent.Explanation -> {
-                narrationPhase = NarrationPhase.Idle
-                autoReadRequested = false
-                isSpeechPaused = false
-                speechSegments = emptyList()
-                speechHighlight = null
-                queuedSpeechRanges.clear()
-                speechMessage = "Finished reading study text and AI explanation"
-                }
-              }
-            }
+            completeSpeechSegment(completedRange)
           }
         }
 
@@ -386,6 +445,7 @@ fun MainScreen(
     onDispose {
       engine.stop()
       engine.shutdown()
+      stopNaturalVoice()
       queuedSpeechRanges.clear()
       speechEngine = null
     }
@@ -397,11 +457,13 @@ fun MainScreen(
     state.isExplaining,
     state.errorMessage,
     speechReady,
+    speechProvider,
   ) {
     if (narrationPhase != NarrationPhase.WaitingForExplanation) return@LaunchedEffect
 
     val explanationSegments = splitTextForSpeechSegments(state.explanation)
-    if (explanationSegments.isNotEmpty() && speechEngine != null && speechReady) {
+    val playbackReady = speechProvider == SpeechProvider.NaturalLocal || (speechEngine != null && speechReady)
+    if (explanationSegments.isNotEmpty() && playbackReady) {
       narrationPhase = NarrationPhase.ReadingExplanation
       speechSegments = explanationSegments
       currentSpeechSegment = 0
@@ -421,6 +483,10 @@ fun MainScreen(
     isSpeechPaused,
     speechPlaybackGeneration,
     speechReady,
+    speechProvider,
+    selectedNaturalVoiceName,
+    speechRate,
+    state.serverUrl,
   ) {
     val content =
       when (narrationPhase) {
@@ -428,22 +494,108 @@ fun MainScreen(
         NarrationPhase.ReadingExplanation -> SpeechContent.Explanation
         else -> return@LaunchedEffect
       }
-    if (isSpeechPaused || !speechReady) return@LaunchedEffect
+    if (isSpeechPaused) return@LaunchedEffect
     val segment = speechSegments.getOrNull(currentSpeechSegment) ?: return@LaunchedEffect
-    val engine = speechEngine ?: return@LaunchedEffect
-    engine.stop()
-    queuedSpeechRanges.clear()
-    engine.setSpeechRate(speechRate)
-    val utteranceId = "study-reader-${content.name}-$speechPlaybackGeneration-$currentSpeechSegment"
-    queuedSpeechRanges[utteranceId] =
+    val activeGeneration = speechPlaybackGeneration
+    val queuedRange =
       QueuedSpeechRange(
         content = content,
         startOffset = segment.startOffset,
         endOffset = segment.endOffset,
         segmentIndex = currentSpeechSegment,
-        generation = speechPlaybackGeneration,
+        generation = activeGeneration,
       )
-    engine.speak(segment.text, TextToSpeech.QUEUE_FLUSH, null, utteranceId)
+
+    fun speakWithPhone(): Boolean {
+      val engine = speechEngine ?: return false
+      if (!speechReady) return false
+      stopNaturalVoice()
+      engine.stop()
+      queuedSpeechRanges.clear()
+      engine.setSpeechRate(speechRate)
+      val utteranceId = "study-reader-${content.name}-$activeGeneration-$currentSpeechSegment"
+      queuedSpeechRanges[utteranceId] = queuedRange
+      return engine.speak(segment.text, TextToSpeech.QUEUE_FLUSH, null, utteranceId) == TextToSpeech.SUCCESS
+    }
+
+    if (speechProvider == SpeechProvider.Phone) {
+      speakWithPhone()
+      return@LaunchedEffect
+    }
+
+    stopNaturalVoice()
+    speechEngine?.stop()
+    queuedSpeechRanges.clear()
+    speechHighlight =
+      ActiveSpeechHighlight(
+        content = content,
+        range = TextHighlightRange(segment.startOffset, segment.endOffset),
+      )
+    speechMessage = "Preparing natural voice..."
+    val audioFile =
+      runCatching {
+          naturalVoiceClient.synthesize(
+            ollamaServerUrl = state.serverUrl,
+            text = segment.text,
+            voiceId = selectedNaturalVoiceName.toIntOrNull() ?: 3,
+            speed = speechRate,
+          )
+        }
+        .getOrElse {
+          if (speakWithPhone()) {
+            speechMessage = "Natural voice unavailable. Using phone voice."
+          } else {
+            narrationPhase = NarrationPhase.Idle
+            autoReadRequested = false
+            speechSegments = emptyList()
+            speechHighlight = null
+            speechMessage = "Natural voice is unavailable"
+          }
+          return@LaunchedEffect
+        }
+    if (activeGeneration != speechPlaybackGeneration || isSpeechPaused) return@LaunchedEffect
+
+    val player = MediaPlayer()
+    val prepared =
+      runCatching {
+          withContext(Dispatchers.IO) {
+            player.setDataSource(audioFile.absolutePath)
+            player.prepare()
+          }
+        }
+        .isSuccess
+    if (!prepared || activeGeneration != speechPlaybackGeneration || isSpeechPaused) {
+      player.release()
+      if (!prepared && !speakWithPhone()) {
+        narrationPhase = NarrationPhase.Idle
+        speechSegments = emptyList()
+        speechHighlight = null
+        speechMessage = "Natural voice audio could not play"
+      }
+      return@LaunchedEffect
+    }
+    player.setOnCompletionListener { completedPlayer ->
+      mainHandler.post {
+        if (naturalVoicePlayer === completedPlayer) naturalVoicePlayer = null
+        completedPlayer.release()
+        completeSpeechSegment(queuedRange)
+      }
+    }
+    player.setOnErrorListener { failedPlayer, _, _ ->
+      mainHandler.post {
+        if (naturalVoicePlayer === failedPlayer) naturalVoicePlayer = null
+        failedPlayer.release()
+        narrationPhase = NarrationPhase.Idle
+        autoReadRequested = false
+        speechSegments = emptyList()
+        speechHighlight = null
+        speechMessage = "Natural voice playback stopped"
+      }
+      true
+    }
+    naturalVoicePlayer = player
+    player.start()
+    speechMessage = if (content == SpeechContent.StudyText) "Reading with natural voice" else "Reading AI with natural voice"
   }
 
   StudyReaderScreen(
@@ -480,6 +632,8 @@ fun MainScreen(
     },
     voiceOptions = voiceOptions,
     selectedVoiceName = selectedVoiceName,
+    speechProvider = speechProvider,
+    selectedNaturalVoiceName = selectedNaturalVoiceName,
     onVoiceSelected = { voiceName ->
       val engine = speechEngine
       val voice = engine?.voices?.firstOrNull { it.name == voiceName && !it.isNetworkConnectionRequired }
@@ -489,23 +643,90 @@ fun MainScreen(
         speechMessage = "Reading voice changed"
       }
     },
+    onSpeechProviderSelected = { provider ->
+      stopNaturalVoice()
+      speechEngine?.stop()
+      speechProvider = provider
+      preferences.edit().putString(SPEECH_PROVIDER_KEY, provider.name).apply()
+      speechMessage = if (provider == SpeechProvider.Phone) "Phone voice selected" else "Natural local voice selected"
+    },
+    onNaturalVoiceSelected = { voiceName ->
+      selectedNaturalVoiceName = voiceName
+      preferences.edit().putString(NATURAL_VOICE_NAME_KEY, voiceName).apply()
+      speechMessage = "Natural reading voice changed"
+    },
     onPreviewVoice = {
-      speechEngine?.let { engine ->
-        engine.stop()
-        engine.setSpeechRate(speechRate)
-        engine.speak(
-          "This is your selected Enlighten voice.",
-          TextToSpeech.QUEUE_FLUSH,
-          null,
-          VOICE_PREVIEW_UTTERANCE_ID,
-        )
-        speechMessage = "Playing voice preview"
+      if (speechProvider == SpeechProvider.Phone) {
+        speechEngine?.let { engine ->
+          stopNaturalVoice()
+          engine.stop()
+          engine.setSpeechRate(speechRate)
+          engine.speak(
+            "This is your selected Enlighten voice.",
+            TextToSpeech.QUEUE_FLUSH,
+            null,
+            VOICE_PREVIEW_UTTERANCE_ID,
+          )
+          speechMessage = "Playing voice preview"
+        }
+      } else {
+        uiScope.launch {
+          stopNaturalVoice()
+          speechEngine?.stop()
+          speechMessage = "Preparing natural voice preview..."
+          runCatching {
+              naturalVoiceClient.synthesize(
+                ollamaServerUrl = state.serverUrl,
+                text = "This is your selected Enlighten natural voice.",
+                voiceId = selectedNaturalVoiceName.toIntOrNull() ?: 3,
+                speed = speechRate,
+              )
+            }
+            .onSuccess { audioFile ->
+              val player = MediaPlayer()
+              val prepared =
+                runCatching {
+                    withContext(Dispatchers.IO) {
+                      player.setDataSource(audioFile.absolutePath)
+                      player.prepare()
+                    }
+                  }
+                  .isSuccess
+              if (prepared) {
+                player.setOnCompletionListener { completedPlayer ->
+                  if (naturalVoicePlayer === completedPlayer) naturalVoicePlayer = null
+                  completedPlayer.release()
+                  speechMessage = "Voice preview finished"
+                }
+                naturalVoicePlayer = player
+                player.start()
+                speechMessage = "Playing natural voice preview"
+              } else {
+                player.release()
+                speechMessage = "Natural voice preview could not play"
+              }
+            }
+            .onFailure {
+              speechMessage = "Start the Enlighten voice service on your computer"
+            }
+        }
       }
     },
+    onAiProviderSelected = screenViewModel::updateAiProviderMode,
+    onGetOnDeviceModel = {
+      runCatching {
+        context.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(ON_DEVICE_MODEL_PAGE)))
+      }
+    },
+    onImportOnDeviceModel = {
+      modelPicker.launch(arrayOf("application/octet-stream", "application/zip", "*/*"))
+    },
+    onRemoveOnDeviceModel = screenViewModel::removeOnDeviceModel,
     onStudyTextChange = screenViewModel::updateStudyText,
     onStudySetTitleChange = screenViewModel::updateStudySetTitle,
     onSaveStudySet = screenViewModel::saveStudySet,
     onNewStudySet = {
+      stopNaturalVoice()
       speechEngine?.stop()
       narrationPhase = NarrationPhase.Idle
       autoReadRequested = false
@@ -516,6 +737,7 @@ fun MainScreen(
       screenViewModel.newStudySet()
     },
     onOpenStudySet = { id ->
+      stopNaturalVoice()
       speechEngine?.stop()
       narrationPhase = NarrationPhase.Idle
       autoReadRequested = false
@@ -562,8 +784,10 @@ fun MainScreen(
     onRead = {
       val segments = splitTextForSpeechSegments(state.studyText)
       val engine = speechEngine
-      if (engine != null && speechReady && segments.isNotEmpty()) {
-        engine.stop()
+      val playbackReady = speechProvider == SpeechProvider.NaturalLocal || (engine != null && speechReady)
+      if (playbackReady && segments.isNotEmpty()) {
+        stopNaturalVoice()
+        engine?.stop()
         queuedSpeechRanges.clear()
         speechHighlight = null
         autoReadRequested = autoReadExplanation
@@ -586,6 +810,7 @@ fun MainScreen(
       }
     },
     onStop = {
+      stopNaturalVoice()
       speechEngine?.stop()
       narrationPhase = NarrationPhase.Idle
       autoReadRequested = false
@@ -602,6 +827,7 @@ fun MainScreen(
           speechPlaybackGeneration++
           speechMessage = "Reading resumed"
         } else {
+          stopNaturalVoice()
           speechEngine?.stop()
           queuedSpeechRanges.clear()
           isSpeechPaused = true
@@ -611,6 +837,7 @@ fun MainScreen(
     },
     onPreviousSegment = {
       if (speechSegments.isNotEmpty()) {
+        stopNaturalVoice()
         speechEngine?.stop()
         queuedSpeechRanges.clear()
         currentSpeechSegment = (currentSpeechSegment - 1).coerceAtLeast(0)
@@ -620,6 +847,7 @@ fun MainScreen(
     },
     onNextSegment = {
       if (speechSegments.isNotEmpty()) {
+        stopNaturalVoice()
         speechEngine?.stop()
         queuedSpeechRanges.clear()
         currentSpeechSegment = (currentSpeechSegment + 1).coerceAtMost(speechSegments.lastIndex)
@@ -662,8 +890,16 @@ internal fun StudyReaderScreen(
   onProfileImageClick: () -> Unit,
   voiceOptions: List<VoiceOption>,
   selectedVoiceName: String?,
+  speechProvider: SpeechProvider,
+  selectedNaturalVoiceName: String,
   onVoiceSelected: (String) -> Unit,
+  onSpeechProviderSelected: (SpeechProvider) -> Unit,
+  onNaturalVoiceSelected: (String) -> Unit,
   onPreviewVoice: () -> Unit,
+  onAiProviderSelected: (AiProviderMode) -> Unit = {},
+  onGetOnDeviceModel: () -> Unit = {},
+  onImportOnDeviceModel: () -> Unit = {},
+  onRemoveOnDeviceModel: () -> Unit = {},
   onStudyTextChange: (String) -> Unit,
   onStudySetTitleChange: (String) -> Unit,
   onSaveStudySet: () -> Unit,
@@ -787,8 +1023,22 @@ internal fun StudyReaderScreen(
             voiceOptions = voiceOptions,
             selectedVoiceName = selectedVoiceName,
             onVoiceSelected = onVoiceSelected,
+            speechProvider = speechProvider,
+            onSpeechProviderSelected = onSpeechProviderSelected,
+            naturalVoiceOptions = NATURAL_VOICE_OPTIONS,
+            selectedNaturalVoiceName = selectedNaturalVoiceName,
+            onNaturalVoiceSelected = onNaturalVoiceSelected,
             onPreviewVoice = onPreviewVoice,
-            voiceControlsEnabled = speechReady && !isNarrationActive,
+            voiceControlsEnabled = !isNarrationActive && (speechReady || speechProvider == SpeechProvider.NaturalLocal),
+            aiProviderMode = state.aiProviderMode,
+            onAiProviderSelected = onAiProviderSelected,
+            onDeviceModelStatus = state.onDeviceModelStatus,
+            isImportingOnDeviceModel = state.isImportingOnDeviceModel,
+            onDeviceModelImportProgress = state.onDeviceModelImportProgress,
+            onDeviceModelMessage = state.onDeviceModelMessage,
+            onGetOnDeviceModel = onGetOnDeviceModel,
+            onImportOnDeviceModel = onImportOnDeviceModel,
+            onRemoveOnDeviceModel = onRemoveOnDeviceModel,
             modifier = Modifier.fillMaxSize().padding(innerPadding),
           )
         }
@@ -992,7 +1242,7 @@ internal fun StudyReaderScreen(
               onRead()
             },
             enabled =
-              speechReady &&
+              (speechReady || speechProvider == SpeechProvider.NaturalLocal) &&
                 state.studyText.isNotBlank() &&
                 !state.isImportingScreenshots &&
                 !state.isImportingDocument &&
@@ -1076,27 +1326,41 @@ internal fun StudyReaderScreen(
       HorizontalDivider()
 
       Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
-        Text("Offline AI connection", style = MaterialTheme.typography.titleLarge)
+        Text("AI tutor", style = MaterialTheme.typography.titleLarge)
         Text(
           state.statusMessage,
           style = MaterialTheme.typography.bodyLarge,
           color = if (state.errorMessage == null) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.error,
         )
-        OutlinedTextField(
+        Text(
+          "Mode: ${state.aiProviderMode.displayName}",
+          style = MaterialTheme.typography.labelLarge,
+          color = MaterialTheme.colorScheme.onSurfaceVariant,
+        )
+        if (state.aiProviderMode != AiProviderMode.OnDevice) {
+          OutlinedTextField(
           value = state.serverUrl,
           onValueChange = onServerUrlChange,
           label = { Text("Computer address") },
           placeholder = { Text("http://192.168.1.100:11434") },
-          supportingText = { Text("Phone and computer must use the same Wi-Fi") },
+          supportingText = {
+            Text(
+              if (state.aiProviderMode == AiProviderMode.Automatic) {
+                "Used only when phone AI is unavailable"
+              } else {
+                "Phone and computer must use the same Wi-Fi"
+              },
+            )
+          },
           keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Uri),
           singleLine = true,
           modifier = Modifier.fillMaxWidth(),
-        )
-        OutlinedButton(
+          )
+          OutlinedButton(
           onClick = onTestConnection,
           enabled = !state.isTestingConnection && !state.isExplaining && !state.isAskingTutor && !isNarrationActive,
           modifier = Modifier.fillMaxWidth().height(48.dp),
-        ) {
+          ) {
           if (state.isTestingConnection) {
             CircularProgressIndicator(modifier = Modifier.size(20.dp), strokeWidth = 2.dp)
           } else {
@@ -1104,6 +1368,13 @@ internal fun StudyReaderScreen(
           }
           Spacer(Modifier.size(8.dp))
           Text(if (state.isTestingConnection) "Testing..." else "Test connection")
+          }
+        } else {
+          Text(
+            if (state.onDeviceModelStatus.installed) "$ON_DEVICE_MODEL_NAME is ready offline" else "Install $ON_DEVICE_MODEL_NAME in Settings",
+            style = MaterialTheme.typography.bodyMedium,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+          )
         }
       }
 
@@ -1347,8 +1618,16 @@ private fun StudyReaderPreview() {
       onProfileImageClick = {},
       voiceOptions = listOf(VoiceOption("demo", "English - demo")),
       selectedVoiceName = "demo",
+      speechProvider = SpeechProvider.Phone,
+      selectedNaturalVoiceName = "3",
       onVoiceSelected = {},
+      onSpeechProviderSelected = {},
+      onNaturalVoiceSelected = {},
       onPreviewVoice = {},
+      onAiProviderSelected = {},
+      onGetOnDeviceModel = {},
+      onImportOnDeviceModel = {},
+      onRemoveOnDeviceModel = {},
       onStudyTextChange = {},
       onStudySetTitleChange = {},
       onSaveStudySet = {},

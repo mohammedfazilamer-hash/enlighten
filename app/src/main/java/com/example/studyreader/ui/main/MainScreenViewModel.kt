@@ -3,9 +3,17 @@ package com.example.studyreader.ui.main
 import android.net.Uri
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import com.example.studyreader.data.AiExecutionProvider
+import com.example.studyreader.data.AiProviderMode
+import com.example.studyreader.data.AiProvidersUnavailableException
+import com.example.studyreader.data.AiTutorCoordinator
 import com.example.studyreader.data.DocumentTextExtractor
 import com.example.studyreader.data.DEFAULT_OLLAMA_URL
 import com.example.studyreader.data.Flashcard
+import com.example.studyreader.data.OnDeviceModelNotInstalledException
+import com.example.studyreader.data.OnDeviceModelStatus
+import com.example.studyreader.data.OnDeviceStudyTutor
+import com.example.studyreader.data.ON_DEVICE_MODEL_NAME
 import com.example.studyreader.data.ScreenshotTextExtractor
 import com.example.studyreader.data.StudySet
 import com.example.studyreader.data.StudySetStore
@@ -27,6 +35,12 @@ import kotlinx.coroutines.launch
 data class MainScreenUiState(
   val studyText: String = "",
   val serverUrl: String = DEFAULT_OLLAMA_URL,
+  val aiProviderMode: AiProviderMode = AiProviderMode.Automatic,
+  val onDeviceModelStatus: OnDeviceModelStatus = OnDeviceModelStatus(installed = false),
+  val isImportingOnDeviceModel: Boolean = false,
+  val onDeviceModelImportProgress: Float? = null,
+  val onDeviceModelMessage: String? = null,
+  val lastAiProvider: AiExecutionProvider? = null,
   val explanation: String = "",
   val statusMessage: String = "Ready",
   val errorMessage: String? = null,
@@ -52,14 +66,25 @@ data class MainScreenUiState(
 )
 
 class MainScreenViewModel(
-  private val studyTutor: StudyTutor,
+  computerTutor: StudyTutor,
+  private val onDeviceTutor: OnDeviceStudyTutor,
   private val screenshotTextExtractor: ScreenshotTextExtractor,
   private val documentTextExtractor: DocumentTextExtractor,
   private val studySetStore: StudySetStore,
   initialServerUrl: String = DEFAULT_OLLAMA_URL,
+  initialAiProviderMode: AiProviderMode = AiProviderMode.Automatic,
   private val saveServerUrl: (String) -> Unit = {},
+  private val saveAiProviderMode: (AiProviderMode) -> Unit = {},
 ) : ViewModel() {
-  private val _uiState = MutableStateFlow(MainScreenUiState(serverUrl = initialServerUrl))
+  private val aiTutor = AiTutorCoordinator(computerTutor, onDeviceTutor)
+  private val _uiState =
+    MutableStateFlow(
+      MainScreenUiState(
+        serverUrl = initialServerUrl,
+        aiProviderMode = initialAiProviderMode,
+        onDeviceModelStatus = onDeviceTutor.modelStatus(),
+      ),
+    )
   val uiState: StateFlow<MainScreenUiState> = _uiState.asStateFlow()
 
   init {
@@ -223,6 +248,90 @@ class MainScreenViewModel(
     _uiState.update { it.copy(serverUrl = value, statusMessage = "Connection not tested", errorMessage = null) }
   }
 
+  fun updateAiProviderMode(mode: AiProviderMode) {
+    saveAiProviderMode(mode)
+    _uiState.update { state ->
+      state.copy(
+        aiProviderMode = mode,
+        errorMessage = null,
+        statusMessage =
+          when (mode) {
+            AiProviderMode.Automatic ->
+              if (state.onDeviceModelStatus.installed) "Auto - phone AI preferred" else "Auto - computer AI until a phone model is installed"
+            AiProviderMode.OnDevice ->
+              if (state.onDeviceModelStatus.installed) "Phone AI ready" else "Phone AI model not installed"
+            AiProviderMode.Computer -> "Computer AI selected"
+          },
+      )
+    }
+  }
+
+  fun importOnDeviceModel(uri: Uri) {
+    val state = _uiState.value
+    if (state.isImportingOnDeviceModel || state.isExplaining || state.isGeneratingFlashcards || state.isAskingTutor) return
+    _uiState.update {
+      it.copy(
+        isImportingOnDeviceModel = true,
+        onDeviceModelImportProgress = null,
+        onDeviceModelMessage = "Importing $ON_DEVICE_MODEL_NAME...",
+        errorMessage = null,
+      )
+    }
+    viewModelScope.launch {
+      runCatching {
+          onDeviceTutor.importModel(uri) { progress ->
+            _uiState.update { it.copy(onDeviceModelImportProgress = progress?.coerceIn(0f, 1f)) }
+          }
+        }
+        .onSuccess { status ->
+          _uiState.update {
+            it.copy(
+              aiProviderMode = AiProviderMode.OnDevice,
+              onDeviceModelStatus = status,
+              isImportingOnDeviceModel = false,
+              onDeviceModelImportProgress = 1f,
+              onDeviceModelMessage = "$ON_DEVICE_MODEL_NAME ready on this phone",
+              statusMessage = "Phone AI ready",
+            )
+          }
+          saveAiProviderMode(AiProviderMode.OnDevice)
+        }
+        .onFailure { error ->
+          _uiState.update {
+            it.copy(
+              onDeviceModelStatus = onDeviceTutor.modelStatus(),
+              isImportingOnDeviceModel = false,
+              onDeviceModelImportProgress = null,
+              onDeviceModelMessage = "Model import failed",
+              errorMessage = error.message ?: "The phone AI model could not be imported.",
+            )
+          }
+        }
+    }
+  }
+
+  fun removeOnDeviceModel() {
+    if (_uiState.value.isImportingOnDeviceModel) return
+    viewModelScope.launch {
+      runCatching { onDeviceTutor.removeModel() }
+        .onSuccess {
+          _uiState.update {
+            it.copy(
+              aiProviderMode = AiProviderMode.Automatic,
+              onDeviceModelStatus = onDeviceTutor.modelStatus(),
+              onDeviceModelImportProgress = null,
+              onDeviceModelMessage = "Phone AI model removed",
+              statusMessage = "Auto - using computer AI",
+            )
+          }
+          saveAiProviderMode(AiProviderMode.Automatic)
+        }
+        .onFailure { error ->
+          _uiState.update { it.copy(errorMessage = error.message ?: "The phone AI model could not be removed.") }
+        }
+    }
+  }
+
   fun importScreenshots(imageUris: List<Uri>, onFinished: () -> Unit = {}) {
     if (imageUris.isEmpty() || _uiState.value.isImportingScreenshots) return
 
@@ -352,7 +461,7 @@ class MainScreenViewModel(
     val serverUrl = _uiState.value.serverUrl
     _uiState.update { it.copy(isTestingConnection = true, errorMessage = null, statusMessage = "Checking Ollama...") }
     viewModelScope.launch {
-      runCatching { studyTutor.checkStatus(serverUrl) }
+      runCatching { aiTutor.checkComputerStatus(serverUrl) }
         .onSuccess { status ->
           saveServerUrl(serverUrl.trim())
           val message = if (status.modelInstalled) "Connected - llama3.2 is ready" else "Connected - llama3.2 is not installed"
@@ -386,15 +495,16 @@ class MainScreenViewModel(
       )
     }
     viewModelScope.launch {
-      runCatching { studyTutor.explain(state.serverUrl, state.studyText) }
-        .onSuccess { explanation ->
-          saveServerUrl(state.serverUrl.trim())
+      runCatching { aiTutor.explain(state.aiProviderMode, state.serverUrl, state.studyText) }
+        .onSuccess { result ->
+          if (result.provider == AiExecutionProvider.Computer) saveServerUrl(state.serverUrl.trim())
           _uiState.update {
             it.copy(
-              explanation = explanation,
+              explanation = result.value,
               isExplaining = false,
               hasUnsavedChanges = true,
-              statusMessage = "Explanation ready",
+              lastAiProvider = result.provider,
+              statusMessage = "Explanation ready on ${result.provider.displayName}",
             )
           }
         }
@@ -425,15 +535,16 @@ class MainScreenViewModel(
       )
     }
     viewModelScope.launch {
-      runCatching { studyTutor.generateFlashcards(state.serverUrl, state.studyText) }
-        .onSuccess { flashcards ->
-          saveServerUrl(state.serverUrl.trim())
+      runCatching { aiTutor.generateFlashcards(state.aiProviderMode, state.serverUrl, state.studyText) }
+        .onSuccess { result ->
+          if (result.provider == AiExecutionProvider.Computer) saveServerUrl(state.serverUrl.trim())
           _uiState.update {
             it.copy(
-              flashcards = flashcards,
+              flashcards = result.value,
               isGeneratingFlashcards = false,
               hasUnsavedChanges = true,
-              statusMessage = "${flashcards.size} study cards ready",
+              lastAiProvider = result.provider,
+              statusMessage = "${result.value.size} study cards ready on ${result.provider.displayName}",
             )
           }
         }
@@ -472,21 +583,23 @@ class MainScreenViewModel(
     }
     viewModelScope.launch {
       runCatching {
-          studyTutor.askQuestion(
+          aiTutor.askQuestion(
+            mode = state.aiProviderMode,
             serverUrl = state.serverUrl,
             studyText = state.studyText,
             history = state.tutorMessages,
             question = cleanQuestion,
           )
         }
-        .onSuccess { answer ->
-          saveServerUrl(state.serverUrl.trim())
+        .onSuccess { result ->
+          if (result.provider == AiExecutionProvider.Computer) saveServerUrl(state.serverUrl.trim())
           _uiState.update {
             it.copy(
-              tutorMessages = it.tutorMessages + TutorMessage(role = TutorMessageRole.Tutor, text = answer),
+              tutorMessages = it.tutorMessages + TutorMessage(role = TutorMessageRole.Tutor, text = result.value),
               isAskingTutor = false,
               hasUnsavedChanges = true,
-              statusMessage = "Tutor answered",
+              lastAiProvider = result.provider,
+              statusMessage = "Tutor answered on ${result.provider.displayName}",
             )
           }
         }
@@ -527,6 +640,7 @@ class MainScreenViewModel(
   override fun onCleared() {
     screenshotTextExtractor.close()
     documentTextExtractor.close()
+    onDeviceTutor.close()
   }
 }
 
@@ -539,9 +653,11 @@ private fun imagesLabel(count: Int): String = if (count == 1) "image" else "imag
 
 private fun friendlyError(error: Throwable): String =
   when (error) {
+    is OnDeviceModelNotInstalledException -> error.message ?: "Install the phone AI model in Settings."
+    is AiProvidersUnavailableException -> error.message ?: "Neither phone AI nor computer AI is available."
     is ConnectException -> "Could not reach Ollama. Check the address, Wi-Fi, and Ollama on your computer."
     is UnknownHostException -> "That computer address could not be found. Check the IP address."
     is SocketTimeoutException -> "Ollama took too long to respond. Try a shorter passage."
     is IllegalArgumentException -> error.message ?: "Check the Ollama address."
-    else -> error.message ?: "Something went wrong while contacting Ollama."
+    else -> error.message ?: "Something went wrong while running the AI tutor."
   }

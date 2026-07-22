@@ -24,3 +24,8 @@ local.properties
 /site/dist/
 /site/.devserver.log
 /site/.devserver.err
+
+# Local neural voice outputs and Python caches. Model weights live in AppData.
+/local-voice/samples/
+**/__pycache__/
+*.pyc

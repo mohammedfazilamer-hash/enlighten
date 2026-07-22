@@ -71,7 +71,11 @@ class MainScreenTest {
         onProfileImageClick = {},
         voiceOptions = listOf(VoiceOption("demo", "English - demo")),
         selectedVoiceName = "demo",
+        speechProvider = SpeechProvider.Phone,
+        selectedNaturalVoiceName = "3",
         onVoiceSelected = {},
+        onSpeechProviderSelected = {},
+        onNaturalVoiceSelected = {},
         onPreviewVoice = {},
         onStudyTextChange = {},
         onStudySetTitleChange = {},
@@ -152,6 +156,8 @@ class MainScreenTest {
 
     composeTestRule.onNodeWithText("Interface color").assertExists()
     composeTestRule.onNodeWithText("Reading voice").assertExists()
+    composeTestRule.onNodeWithText("Phone").assertExists()
+    composeTestRule.onNodeWithText("Natural local").assertExists()
     composeTestRule.onNodeWithText("Choose voice").assertIsEnabled()
     composeTestRule.onNodeWithText("Choose voice").performClick()
     composeTestRule.onNodeWithText("Choose reading voice").assertExists()

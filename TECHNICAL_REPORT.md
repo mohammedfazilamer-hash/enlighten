@@ -1,6 +1,6 @@
 # Enlighten Technical Architecture Report
 
-**Assessment date:** 2026-07-18  
+**Assessment date:** 2026-07-21
 **Assessed workspace:** `C:\Users\User\OneDrive\Documents\college app\StudyReader`  
 **Application:** Enlighten for Android  
 **Package:** `com.example.studyreader`  
@@ -11,37 +11,37 @@
 
 Enlighten is a functional Android study assistant MVP. A student can paste text, extract text from screenshots, camera photos, PDFs, DOCX files, and TXT files, listen to the material through Android text-to-speech, generate a simplified explanation with a local language model, create flashcards, run a self-check quiz, ask passage-grounded tutor questions, and save study sets locally.
 
-The Android application performs document selection, OCR, storage, interface rendering, and speech on the phone. It does not contain an LLM and it does not use a paid cloud API. AI requests are sent directly over the local Wi-Fi network to Ollama running on the user's Windows computer. Ollama serves `llama3.2:3b`, a 3.2 billion parameter, Q4_K_M quantized model occupying approximately 2.02 GB on disk. This design provides private, no-per-call-cost inference with good performance on the current RTX 3070 computer, but it means the phone must be able to reach that computer whenever AI features are used.
+The Android application performs document selection, OCR, storage, interface rendering, speech, and default AI inference on the phone. Gemma 3 1B instruction-tuned int4 runs through LiteRT-LM 0.14.0 from a 584,417,280-byte model copied into private no-backup storage. The user can select Auto, Phone, or Computer mode. Phone mode never routes study text to a computer. Auto prefers Gemma and falls back to Ollama; Computer mode explicitly uses `llama3.2:3b` on the user's Windows PC. No paid cloud API or Enlighten-owned application backend is involved.
 
-The product is beyond a proof of concept: its core study workflow is implemented, the APK builds, unit and instrumentation tests exist, lint passes without errors, and key workflows have been smoke-tested on a Pixel 9. It is not yet production-ready. The most important blockers are the mismatch between the application's 250,000-character import limit and Ollama's current 4,096-token runtime context, stale asynchronous AI responses that can be applied to the wrong active study set, unauthenticated cleartext Ollama traffic, potentially unbounded PDF bitmap allocation, incomplete backup/privacy controls, and the absence of release signing and Play Store deployment configuration.
+The product is beyond a proof of concept: its core study workflow is implemented, the APK builds, 18 unit tests pass, lint passes, and key workflows have been smoke-tested on a Pixel 9. Real-hardware tests with Wi-Fi and mobile data disabled completed an explanation in about 10 seconds, generated six flashcards in about 5 seconds, and answered a tutor question on the phone model. It is not yet production-ready. The main blockers are long-document context handling, stale asynchronous AI results, non-streaming generation without cancellation, optional Ollama cleartext transport, PDF bitmap limits, incomplete backup/privacy controls, and the absence of release signing and Play Store configuration.
 
-The architecture is appropriate for one student and one computer on a trusted home network. It does not scale as a shared service because there is no central backend, identity system, request queue, authentication, or tenant isolation. Aggregate installations can scale independently if every user supplies their own computer. A production path should first harden the current local architecture, then introduce a provider abstraction that supports on-device AI on compatible phones and keeps Ollama as an optional higher-quality provider.
+The on-device-first architecture scales horizontally with installations because every compatible phone supplies its own inference capacity. There is no shared Enlighten service to overload. Optional Ollama remains appropriate for one student and one computer on a trusted network but is not a shared service architecture. Production work should harden model lifecycle, memory/thermal behavior, context processing, request cancellation, and release distribution while retaining Ollama as an opt-in higher-quality provider.
 
 ## 2. Assessment Method and Confidence
 
-This report is based on a full inspection of the Kotlin source, Android resources, Gradle configuration, manifests, tests, generated APK, local Ollama installation, installed model metadata, and runtime behavior on the development computer. Build, test, lint, APK, model, CPU, RAM, and GPU values are measured. Latency ranges for OCR, long PDFs, and unsupported user volumes are engineering estimates and are labeled as such.
+This report is based on inspection of the Kotlin source, Android resources, Gradle configuration, manifests, tests, generated APK, local Ollama installation, Hugging Face model metadata, and runtime behavior on a Pixel 9 and the development computer. Build, test, lint, APK, model size/checksum, phone inference, CPU, RAM, and GPU values are measured. Latency ranges for OCR, long PDFs, and unsupported user volumes are engineering estimates and are labeled as such.
 
-The workspace is not currently a Git repository, so the assessment cannot identify a commit SHA or determine change history. The report describes the files present on 2026-07-18.
+The report describes the files present on 2026-07-21.
 
 ## 3. Current Product Status
 
 **Lifecycle stage:** Feature-complete local MVP, suitable for supervised personal testing.
 
-**Operational model:** One Android phone communicates with one Windows computer on the same reachable network.
+**Operational model:** One Android phone runs AI locally; a reachable Windows Ollama computer is optional.
 
-**Build status:** `testDebugUnitTest`, `lintDebug`, and `assembleDebug` pass. Lint reports 0 errors and 26 warnings.
+**Build status:** `testDebugUnitTest`, `lintDebug`, and `assembleDebug` pass.
 
-**Test inventory:** 9 local unit tests and 7 Android instrumentation tests. Instrumentation tests compile. The latest feature set was smoke-tested on a Pixel 9, but the full instrumentation suite was not rerun after the latest changes because doing so would clear or alter the user's application data.
+**Test inventory:** 18 local unit tests pass. Android instrumentation sources compile. The latest feature set was smoke-tested on a Pixel 9 without clearing user data.
 
 **Distribution status:** Debug APK only. There is no production application ID, release signing, Play App Bundle, Play Store listing, CI/CD workflow, or formal versioning process.
 
-**Current artifact:** `artifacts/Enlighten-debug.apk`
+**Current artifact:** `%USERPROFILE%\.gradle\studyreader-build\StudyReader\app\outputs\apk\debug\app-debug.apk`
 
 | Artifact property | Value |
 |---|---:|
-| File size | 64,258,664 bytes |
-| Approximate size | 61.3 MiB |
-| SHA-256 | `46B8AAD8C3EDE6F73D0F18DBC59F56F03C9353D588277CFFD9997866691DDC99` |
+| File size | 110,856,173 bytes |
+| Approximate size | 105.7 MiB |
+| Reason for growth | LiteRT-LM native Android runtime libraries |
 
 ## 4. Completed Features
 
@@ -64,6 +64,9 @@ The workspace is not currently a Git repository, so the assessment cannot identi
 | Appearance | Teal, Forest, Rose, and Blue palettes with system light/dark mode | Complete |
 | Voice settings | Select an installed offline voice and save speech rate | Complete |
 | Connection settings | Edit, save, and test the Ollama server address | Complete |
+| AI provider settings | Select Auto, Phone, or Computer and see the active privacy path | Complete |
+| Phone model lifecycle | Import, validate, replace, and remove Gemma from private no-backup storage | Complete |
+| On-device AI | Explanation, flashcards, and Ask Tutor through Gemma 3 1B on Android CPU | Complete and device-tested |
 | Privacy baseline | No analytics, account, API key, or cloud application backend | Complete |
 
 The quiz is a self-assessment interface, not an automatically graded quiz. Mastery marks are transient and are not persisted as spaced-repetition history.
@@ -74,9 +77,8 @@ No formal issue tracker or product requirements document exists. The following i
 
 | Feature | Current state | Recommended disposition |
 |---|---|---|
-| Fully on-device AI | Not implemented | Highest-value product direction after correctness fixes |
-| Gemini Nano / ML Kit Prompt API | Not implemented | Add behind a `StudyAiProvider` abstraction for supported devices |
-| Small bundled LLM | Not implemented | Investigate only after APK, memory, thermal, and license testing |
+| Android GPU/NPU inference | CPU implemented | Evaluate only after correctness and compatibility testing |
+| Model download manager | Manual Hugging Face download/import | Add resumable downloads with license-aware onboarding |
 | External AI app sharing | Not implemented | Optional fallback using Android share intents; cannot provide seamless API behavior |
 | Spaced repetition | Not implemented | Add persistent scheduling after migrating storage to Room |
 | Automatic quiz grading | Not implemented | Add structured answers and deterministic grading rules |
@@ -134,6 +136,7 @@ The build directory is redirected to `%USERPROFILE%\.gradle\studyreader-build\St
 | Material 3 | 1.4.0 resolved | UI components and theme |
 | Material icons extended | 1.7.8 | Interface icons |
 | ML Kit Text Recognition | 16.0.1 bundled | On-device Latin-script OCR |
+| LiteRT-LM Android | 0.14.0 | On-device Gemma inference and engine lifecycle |
 | Kotlin coroutines | 1.9.0 resolved transitively | Background work and flows |
 | `org.json` | Android platform | Ollama payload and local JSON handling |
 | JUnit | 4.13.2 | Local tests |
@@ -161,7 +164,9 @@ StudyReader/
 |       |   |   |-- data/
 |       |   |   |   |-- CameraImageStore.kt
 |       |   |   |   |-- DocumentTextExtractor.kt
+|       |   |   |   |-- AiTutorCoordinator.kt
 |       |   |   |   |-- OllamaClient.kt
+|       |   |   |   |-- OnDeviceStudyTutor.kt
 |       |   |   |   |-- ProfileImageStore.kt
 |       |   |   |   |-- ScreenshotTextExtractor.kt
 |       |   |   |   `-- StudySetStore.kt
@@ -190,11 +195,11 @@ StudyReader/
 `-- start-ollama.cmd
 ```
 
-There are 20 production Kotlin files totaling approximately 3,873 lines and two test source files totaling approximately 350 lines. `MainScreen.kt` is approximately 1,377 lines and `MainScreenViewModel.kt` approximately 547 lines. These two files contain most product behavior and are the largest maintainability hotspots.
+There are 23 production Kotlin files totaling approximately 4,912 lines and four Kotlin test source files. `MainScreen.kt` and `MainScreenViewModel.kt` contain most product behavior and remain the largest maintainability hotspots.
 
 ## 8. System Architecture
 
-Enlighten is a two-node local system. The Android client is the application and orchestration layer. Ollama is an independently installed local inference server. There is no Enlighten-owned backend process.
+Enlighten is an on-device-first system with an optional second compute node. The Android client owns the application, orchestration, and default AI runtime. Ollama is an independently installed optional inference server. There is no Enlighten-owned backend process.
 
 ```mermaid
 flowchart LR
@@ -203,7 +208,10 @@ flowchart LR
     App --> OCR["Bundled ML Kit OCR"]
     App --> TTS["Android TextToSpeech engine"]
     App --> Files["Private app files and SharedPreferences"]
-    App -->|"HTTP over private Wi-Fi"| Ollama["Ollama on Windows PC"]
+    App --> Coordinator["AI provider coordinator"]
+    Coordinator -->|"Phone or Auto"| LiteRT["LiteRT-LM on Android CPU"]
+    LiteRT --> Gemma["Gemma 3 1B IT int4"]
+    Coordinator -->|"Computer or Auto fallback"| Ollama["Ollama on Windows PC"]
     Ollama --> Model["llama3.2:3b Q4_K_M"]
 ```
 
@@ -215,8 +223,10 @@ flowchart LR
 | `MainScreenViewModel` | Core screen state, AI operations, OCR/document imports, study-set operations, and error status |
 | Data helpers | File storage, OCR, document extraction, profile image persistence, and HTTP requests |
 | Android services | Camera, Storage Access Framework, photo picker, URI grants, and TTS engine |
-| Ollama | Model loading, tokenization, prompt execution, and text generation |
-| `llama3.2:3b` | Explanation, flashcard generation, and tutor answers |
+| `AiTutorCoordinator` | Provider ordering, strict privacy-mode enforcement, and result provenance |
+| `OnDeviceStudyTutor` | Model import/validation, LiteRT-LM engine lifecycle, and Android inference |
+| Gemma 3 1B | Default explanation, flashcard generation, and tutor answers on the phone |
+| Ollama / `llama3.2:3b` | Optional higher-quality computer inference and Auto fallback |
 
 The code uses interfaces around important data helpers, which helps testing, but it does not have formal domain, repository, and use-case layers. Dependencies are manually constructed from Compose when the ViewModel is created.
 
@@ -248,22 +258,27 @@ sequenceDiagram
     actor Student
     participant UI as Compose and TTS controller
     participant VM as MainScreenViewModel
-    participant O as OllamaClient
-    participant L as Ollama and Llama model
+    participant C as AiTutorCoordinator
+    participant P as Phone Gemma provider
+    participant O as Optional Ollama provider
     Student->>UI: Tap Read aloud
     UI->>UI: Split source into speech segments
     UI->>VM: Request explanation if automatic mode is enabled
-    VM->>O: Generate explanation from source snapshot
-    O->>L: POST /api/generate
+    VM->>C: Generate explanation from source snapshot
+    C->>P: Run Gemma locally when installed
     UI->>UI: Speak source one segment at a time
-    L-->>O: Complete generated response
-    O-->>VM: Explanation text
+    P-->>C: Complete generated response
+    opt Auto fallback after phone failure
+      C->>O: POST /api/generate over private Wi-Fi
+      O-->>C: Complete generated response
+    end
+    C-->>VM: Explanation plus provider provenance
     VM-->>UI: Update StateFlow
     UI->>UI: Wait if source ended before AI response
     UI->>UI: Speak explanation automatically
 ```
 
-The AI request and source narration run concurrently. This reduces total wait time. Because the AI response is non-streaming, the explanation cannot be displayed or spoken until generation is complete.
+The AI request and source narration run concurrently. This reduces total wait time. Because both providers currently return non-streaming responses, the explanation cannot be displayed or spoken until generation is complete.
 
 ### 9.3 Save and Reload
 
@@ -271,41 +286,40 @@ The current title, source, explanation, flashcards, and tutor messages are seria
 
 ## 10. AI Model and Runtime
 
-### 10.1 Model Details
+### 10.1 Phone Model Details
 
 | Property | Measured value |
 |---|---|
-| Ollama model name | `llama3.2:3b` |
-| Model ID | `a80c4f17acd5` |
-| Digest | `a80c4f17acd55265feec403c7aef86be0c25983ab279d83f3bcd3abbcb5b8b72` |
-| Architecture | Llama |
-| Parameter count | 3.2 billion |
-| Quantization | Q4_K_M |
-| Embedding length | 3,072 |
-| Model maximum context | 131,072 tokens |
-| Current Ollama runtime context | 4,096 tokens |
-| Stored model size | 2,019,393,189 bytes, about 2.02 GB or 1.88 GiB |
-| Observed loaded runtime size | About 2.6 GB GPU memory |
-| Observed execution device | 100% GPU |
-| Keep-alive requested by app | 10 minutes |
+| Model | Gemma 3 1B instruction-tuned |
+| Repository | `litert-community/Gemma3-1B-IT` on Hugging Face |
+| File | `gemma3-1b-it-int4.litertlm` |
+| Quantization | Dynamic int4 QAT |
+| Runtime | LiteRT-LM 0.14.0 |
+| Backend | Android CPU |
+| Context configuration | 2,048 tokens in the packaged LiteRT-LM artifact |
+| Stored size | 584,417,280 bytes, about 557.3 MiB |
+| SHA-256 | `1325AE366D31950F137C9C357B9FA89448B176D76998180C08CEACA78BBA98BE` |
+| Private location | `noBackupFilesDir/ai-models`, excluded from Android backup |
+| Measured Pixel 9 latency | Explanation about 10 s; six flashcards about 5 s for a short passage |
+| Published Samsung S24 Ultra memory benchmark | About 1,009 MB CPU RSS |
 
-### 10.2 Why This Model Was Chosen
+### 10.2 Why Gemma and the Optional Computer Model Were Chosen
 
-`llama3.2:3b` is a sensible MVP compromise. It is small enough to fit comfortably in the current 8 GB RTX 3070 VRAM while leaving room for context and runtime overhead. It produces materially better explanations and structured study content than sub-one-billion-parameter models, runs fully offline after download, requires no API key, and has no per-request cost.
+Gemma 3 1B is small enough for current flagship Android memory budgets while retaining instruction-following behavior suitable for short study passages. The `.litertlm` package is directly supported by Google's mobile runtime and can be initialized and reused in-process. This removes the computer and Wi-Fi dependency, avoids per-call cost, and keeps strict Phone-mode prompts on the handset. Its trade-offs are weaker reasoning and factual precision, shorter practical context, CPU heat, and device compatibility risk.
 
-The trade-off is quality and availability. A 3B model is weaker at reasoning, factual reliability, instruction hierarchy, and long-document synthesis than larger local or frontier cloud models. Running it through a PC makes the phone dependent on that computer and network. The model file is relatively small, but the current effective context is only 4,096 tokens because Ollama was observed using its default runtime context rather than the model's theoretical maximum.
+The optional `llama3.2:3b` Q4_K_M Ollama model remains useful because the current RTX 3070 runs it quickly and its 3.2 billion parameters generally provide stronger explanations than Gemma 1B. Its stored size is approximately 2.02 GB, observed GPU residency is about 2.6 GB, and the observed runtime context is 4,096 tokens. Computer mode trades phone independence for answer quality; Auto mode uses it only as fallback.
 
 ### 10.3 Current Prompt Strategies
 
 The explanation prompt requests four sections: a simple explanation, important terms, key points, and three quiz questions. Temperature is `0.2`.
 
-The flashcard prompt requests exactly six question-and-answer cards. It uses Ollama JSON output mode and temperature `0.15`. The client parses the returned object and tolerates a fenced JSON response. It accepts up to ten returned cards.
+The flashcard prompt requests exactly six question-and-answer cards. Ollama uses JSON mode at temperature `0.15`. The phone provider uses a compact `Q: ... | A: ...` line format at temperature `0.1`, which is easier for a 1B model to follow. The shared parser accepts JSON, embedded JSON, compact line pairs, and numbered question/answer pairs, returning at most ten cards.
 
 The tutor prompt contains the active passage, the last six tutor conversation messages, and the new question. Temperature is `0.2`. The answer is intended to remain grounded in the passage, but this is prompt guidance rather than a verified retrieval or citation mechanism.
 
 ### 10.4 Critical Context Limitation
 
-The Android import layer accepts up to 250,000 characters. A 4,096-token context often holds roughly 12,000 to 18,000 English characters after prompt overhead, depending on vocabulary and formatting. A large imported document can therefore exceed the current AI context by more than an order of magnitude.
+The Android import layer accepts up to 250,000 characters, while the phone model package has a much smaller usable context and Ollama was observed at 4,096 tokens. A large imported document can therefore exceed either provider's context by more than an order of magnitude.
 
 The application does not count tokens, split text into semantic chunks, summarize chunks, retrieve relevant chunks for tutor questions, or reserve output tokens. Long passages can be truncated by the runtime, lose important sections, produce incomplete explanations, or fail. Increasing `num_ctx` alone is not a complete fix because context memory and prompt-evaluation latency grow significantly. The recommended solution is token-aware chunking plus hierarchical synthesis and retrieval.
 
@@ -313,7 +327,7 @@ The application does not count tokens, split text into semantic chunks, summariz
 
 ### 11.1 Backend Status
 
-There is no custom Enlighten backend. The Android app calls Ollama directly using Java `HttpURLConnection` and `org.json`. The configured base URL defaults to the example `http://192.168.1.100:11434`, can be edited in settings, and is persisted in `SharedPreferences`.
+There is no custom Enlighten backend. Phone inference is an in-process Kotlin call to LiteRT-LM and has no HTTP endpoint. When Computer mode or Auto fallback is used, the Android app calls Ollama directly using Java `HttpURLConnection` and `org.json`. The configured base URL defaults to the example `http://192.168.1.100:11434`, can be edited in settings, and is persisted in `SharedPreferences`.
 
 The base URL validator accepts HTTP or HTTPS, a host, and an optional port. Paths, query strings, and fragments are rejected. The HTTP connect timeout is 10 seconds and the read timeout is 180 seconds.
 
@@ -380,7 +394,7 @@ This design survives ordinary recomposition and the ViewModel survives configura
 
 ### 12.4 Dependency Management
 
-The ViewModel is manually created with concrete OCR, file, store, and Ollama implementations. No dependency injection framework is used. Manual construction is adequate at this size, but provider switching and comprehensive tests would benefit from a small dependency container or Hilt once the app grows.
+The ViewModel is manually created with concrete OCR, file, store, Ollama, on-device Gemma, and provider-coordinator implementations. No dependency injection framework is used. Manual construction is adequate at this size, but broader provider testing would benefit from a small dependency container or Hilt once the app grows.
 
 ## 13. Text Extraction Architecture
 
@@ -487,7 +501,7 @@ OCR and parsing run away from the main thread, so the interface should remain re
 
 ### 16.4 APK and Build Performance
 
-The 61.3 MiB debug APK is large for the feature count. The bundled OCR model and debug packaging contribute materially. Release minification is currently disabled, and no release size measurement exists. Production should enable R8/resource shrinking after testing and distribute an Android App Bundle so Play can optimize delivery.
+The 105.7 MiB debug APK is large for the feature count. LiteRT-LM native libraries, the bundled OCR model, and debug packaging contribute materially; the 557.3 MiB Gemma model is downloaded separately and is not inside the APK. Release minification is disabled, and no release size measurement exists. Production should enable R8/resource shrinking after testing and distribute an Android App Bundle so Play can optimize native delivery.
 
 ## 17. Security and Privacy
 
@@ -503,12 +517,14 @@ The 61.3 MiB debug APK is large for the feature count. The bundled OCR model and
 | Non-exported FileProvider | Camera cache is exposed only through temporary URI grants |
 | Secure DOCX XML settings | DOCTYPE and external entity processing are disabled |
 | No analytics or crash SDK | No automatic behavioral telemetry leaves the device |
+| Strict Phone provider | Study prompts and generated responses remain on the phone |
+| Model in no-backup storage | The 557.3 MiB licensed model is not copied into Android backup |
 
 ### 17.2 High-Risk Findings
 
 | Risk | Severity | Impact | Recommended mitigation |
 |---|---|---|---|
-| Cleartext HTTP to Ollama | High | Anyone able to observe the LAN may read study text, questions, and generated answers | Use a VPN tunnel, HTTPS reverse proxy, or authenticated local gateway; restrict cleartext with a network security config |
+| Cleartext HTTP to optional Ollama | High when enabled | Anyone able to observe the LAN may read study text, questions, and generated answers | Use Phone mode, a VPN tunnel, HTTPS reverse proxy, or authenticated local gateway; restrict cleartext with a network security config |
 | Ollama binds to all interfaces without app authentication | High | Other LAN clients can submit prompts, consume GPU resources, or access the service | Bind to a trusted interface, firewall private profile only, add authentication, never port-forward 11434 |
 | Backup behavior is not explicitly constrained | High | Study sets, profile data, and preferences may enter Android cloud/device backup despite local-only expectations | Wire `dataExtractionRules` and `fullBackupContent` into the manifest or disable backup for sensitive data |
 | Long documents exceed context silently | High | Incorrect or incomplete AI output may be presented as a complete explanation | Token-aware chunking, visible source coverage, citations, and hard input limits |
@@ -516,6 +532,8 @@ The 61.3 MiB debug APK is large for the feature count. The bundled OCR model and
 | No encryption or app lock | Medium | Anyone with an unlocked phone or accessible backup can read study data | Optional biometric lock and encrypted storage for sensitive use cases |
 | No model output verification | Medium | Hallucinations may teach incorrect material | Ground answers to passage chunks, cite passages, add uncertainty language, and expose source comparison |
 | No production privacy policy | Medium | Store release and user trust requirements are unmet | Document local processing, LAN transfer, retention, deletion, and optional future providers |
+| Mobile model heat and memory pressure | Medium | Repeated generation can warm the device or be killed under memory pressure | Add capability checks, thermal feedback, cancellation, and lower-resource fallback behavior |
+| Gated model license onboarding | Medium | Users can fail setup or misunderstand the separate Gemma terms | Present the license source, exact filename/checksum, storage cost, and removal controls clearly |
 
 The current explicit model name is local, but a hardened installation should also disable Ollama cloud functionality where appropriate and document the setting. Llama model license and attribution requirements must be reviewed before public distribution.
 
@@ -525,10 +543,11 @@ The current explicit model name is local, but a hardened installation should als
 
 | Priority | Finding | Failure mode |
 |---|---|---|
-| P0 | 250,000-character input versus 4,096-token runtime context | Large documents are truncated, misunderstood, or rejected without clear coverage feedback |
+| P0 | 250,000-character input versus limited phone and Ollama contexts | Large documents are truncated, misunderstood, or rejected without clear coverage feedback |
 | P0 | AI jobs are not correlated to the source/set version | A response started for one passage can be written into a different study set opened while the request is running |
 | P1 | In-flight AI work is not cancelable from the UI | Stop narration does not stop automatic explanation generation; stale work consumes resources and can update state later |
-| P1 | Cleartext, unauthenticated Ollama network exposure | Private content and GPU service are exposed to the reachable LAN |
+| P1 | Cleartext, unauthenticated Ollama network exposure when enabled | Computer-mode content and GPU service are exposed to the reachable LAN |
+| P1 | No phone-generation cancellation or streaming | Long local requests can hold roughly 1 GB of RAM and cannot be stopped cleanly |
 | P1 | PDF bitmap pixel area is not bounded | A malformed or extreme page can exhaust phone memory |
 | P1 | Backup XML resources are not referenced by the manifest | Sensitive local data may be backed up under platform defaults |
 | P1 | No process-death recovery or autosave | Unsaved work is lost when Android kills the process |
@@ -562,12 +581,14 @@ Prerequisites are Android Studio/JBR, Android SDK 36, and a connected or wireles
 
 ```powershell
 ./gradlew testDebugUnitTest lintDebug assembleDebug
-adb install -r artifacts/Enlighten-debug.apk
+adb install -r "$env:USERPROFILE\.gradle\studyreader-build\StudyReader\app\outputs\apk\debug\app-debug.apk"
 ```
 
 The build output redirection under the user's Gradle directory is intentional because OneDrive can lock generated files.
 
 ### 19.2 Ollama Computer Setup
+
+Ollama is optional. For phone-only operation, download `gemma3-1b-it-int4.litertlm` from the licensed Hugging Face repository, then use **Settings > AI tutor > Import**. The app copies and initializes the model in private no-backup storage and selects Phone mode after success.
 
 ```powershell
 ollama pull llama3.2:3b
@@ -580,7 +601,7 @@ Production-like local setup should use a stable DHCP reservation, Windows Firewa
 
 ### 19.3 Android Installation
 
-The current workflow uses ADB and a debug-signed APK. The phone requires Android 8.0 or newer. USB or wireless debugging is needed only for developer installation, not for ordinary use after installation. The phone and computer must be on mutually reachable networks for Ollama AI features. OCR, saved sets, and TTS remain usable without the computer.
+The current workflow uses ADB and a debug-signed APK. The phone requires Android 8.0 or newer. USB or wireless debugging is needed only for developer installation, not for ordinary use after installation. Phone AI, OCR, saved sets, and Android TTS work without the computer or any network. The phone and computer must be mutually reachable only for optional Ollama or Kokoro features.
 
 ### 19.4 Production Release Requirements
 
@@ -598,15 +619,15 @@ The current workflow uses ADB and a debug-signed APK. The phone requires Android
 
 ### 20.1 Important Interpretation
 
-The current product is decentralized. If 100 users each have a separate phone and separate computer, there is no shared Enlighten server to overload. The aggregate system scales by duplicating hardware, but setup, compatibility, updates, and support become difficult. If many users share one Ollama computer, inference and network capacity fail quickly.
+The current product is decentralized. Each compatible phone contributes its own inference capacity, so aggregate AI load does not hit a shared Enlighten server. Distribution, model onboarding, compatibility, updates, and support become the scaling constraints. If many users instead share one optional Ollama computer, inference and network capacity fail quickly.
 
 ### 20.2 User-Level Breakdown
 
 | User count | Current architecture behavior | First things that break | Required evolution |
 |---:|---|---|---|
-| 100 | Feasible only as 100 isolated personal installations; poor as one shared server | Manual IP setup, firewall variability, support load, model/version drift; shared GPU requests queue for minutes | Signed distribution, automated diagnostics, provider abstraction, secure pairing, per-device on-device AI where possible |
-| 1,000 | Operationally impractical to manage manually | No identity, update channel, telemetry, compatibility matrix, remote reachability, tenant isolation, or service queue | Play distribution, CI/CD, crash/health telemetry with consent, configuration management, on-device inference or authenticated gateway |
-| 10,000 | Direct Ollama architecture is not a manageable product platform | Security exposure, support burden, model licensing/updates, inconsistent hardware, no data migration strategy | On-device-first architecture or managed multi-tenant inference, Room migrations, observability, policy/compliance, staged rollouts |
+| 100 | Feasible as isolated phone installations | Sideloading, gated model setup, device variability, and support load | Signed distribution, model onboarding, capability diagnostics, and compatibility testing |
+| 1,000 | Compute scales, operations do not | No update channel, compatibility matrix, consented crash data, or migration discipline | Play distribution, CI/CD, staged rollout, model/version management, and opt-in health diagnostics |
+| 10,000 | Phone compute remains decentralized | Licensing/onboarding support, inconsistent thermals and memory, no data migration strategy | Room migrations, device allowlist/fallback, observability, policy/compliance, and staged model updates |
 | 100,000 | Current architecture fails as a service design | No autoscaling, authentication, abuse control, quotas, billing controls, data layer, SLOs, disaster recovery, or global routing | On-device inference at the edge or OAuth-secured backend, autoscaled GPU pools, queues, rate limits, streaming, databases, observability, regional privacy controls |
 
 ### 20.3 Shared GPU Capacity Illustration
@@ -615,7 +636,7 @@ The measured model generated approximately 133 tokens per second with a warm mod
 
 ### 20.4 Recommended Scale Strategy
 
-An on-device model shifts inference cost and capacity to each phone and is the best fit for the application's privacy and no-subscription goal. Compatible devices can use Gemini Nano through ML Kit Prompt API or another supported mobile runtime. The application must handle model availability, feature download, foreground execution, token limits, device quotas, thermal constraints, and quality differences.
+The implemented Gemma/LiteRT-LM provider shifts inference cost and capacity to each phone and fits the application's privacy and no-subscription goal. The next scaling work is model onboarding, device capability detection, foreground execution, token limits, thermal constraints, cancellation, and quality differences.
 
 Ollama should remain an optional `High quality on computer` provider. If a shared cloud tier is ever introduced, it should be a separate opt-in provider behind the same interface rather than changing core study workflows.
 
@@ -686,31 +707,31 @@ Every request should include a set ID, source revision, selected chunks, prompt 
 | Phase | Goal | Deliverables |
 |---|---|---|
 | Phase 0 | Correctness and privacy | Context-aware chunking, race fixes, cancellation, PDF memory cap, backup policy, exact health checks, secure LAN guidance |
-| Phase 1 | Stable architecture | Room, DataStore, speech controller, feature decomposition, provider interfaces, CI, expanded tests |
-| Phase 2 | Phone independence | On-device Gemini Nano provider on supported devices, capability detection, Ollama optional fallback, provider selection UI |
+| Phase 1 | Phone AI reliability | Streaming, cancellation, device capability checks, thermal feedback, model download manager, GPU/NPU evaluation |
+| Phase 2 | Stable architecture | Room, DataStore, speech controller, feature decomposition, dependency container, CI, expanded tests |
 | Phase 3 | Learning quality | Spaced repetition, graded quizzes, persistent mastery, citations, native PDF text, multilingual extraction and speech |
 | Phase 4 | Distribution | Production ID/signing, app bundle, Play internal testing, privacy policy, license notices, staged releases |
 | Phase 5 | Optional scale | Encrypted sync, accounts, multi-device, or managed AI only if user demand justifies cost and privacy trade-offs |
 
 ## 24. Explain This Project to Another AI Engineer
 
-Enlighten is not an Android wrapper around a cloud API. It is a local-first Android application whose phone-side responsibilities are text acquisition, document/OCR processing, state, persistence, interface rendering, and speech. Its AI responsibility is delegated to a local Ollama server running `llama3.2:3b` on a Windows PC. The app calls Ollama directly over LAN HTTP and receives one complete response per operation.
+Enlighten is not an Android wrapper around a cloud API. It is a local-first Android application whose phone-side responsibilities include text acquisition, document/OCR processing, state, persistence, interface rendering, speech, and default LLM inference. Gemma 3 1B int4 runs in-process through LiteRT-LM. Ollama `llama3.2:3b` remains an optional second provider reached over private LAN HTTP.
 
-The central product workflow is `source -> speak -> explain -> speak explanation -> study tools`. When automatic explanation is enabled, the app starts the model request at the same time it begins source narration. This is a deliberate latency-hiding decision: generation often finishes before narration, so the explanation can start immediately. The trade-off is concurrency complexity. The current implementation protects against stale TTS callbacks but does not correlate asynchronous model results with the passage revision that created them. Fix that before extending the workflow.
+The central product workflow is `source -> speak -> explain -> speak explanation -> study tools`. When automatic explanation is enabled, the app starts the selected model request while source narration begins. `AiTutorCoordinator` enforces provider order: Phone is local-only, Computer is Ollama-only, and Auto prefers an installed phone model before falling back to the computer. Every success carries provider provenance back to the UI. The remaining concurrency flaw is that asynchronous results are not correlated with the source revision that created them.
 
 Input normalization happens on the phone. Screenshots and camera photos go through bundled Latin ML Kit OCR. PDFs are rendered page by page and OCRed, which supports scans but wastes work on digital documents. DOCX is parsed directly from its XML package, and TXT is read as UTF-8. All extracted text converges into one source string, and changing that source invalidates explanation, flashcards, and tutor history.
 
 The Android state model is a single screen-level `StateFlow` plus Compose-local speech and interaction state. This kept the MVP easy to build but now concentrates too many concerns in `MainScreen.kt` and `MainScreenViewModel.kt`. Avoid adding more flags to those files. Extract a study-session coordinator, speech controller, persistence repositories, and AI provider interface. Use immutable request snapshots with IDs and revisions.
 
-The most important non-obvious defect is context size. The model metadata supports a large theoretical context, but the observed Ollama process uses 4,096 tokens. The app accepts 250,000 characters and sends the text as one prompt. Do not solve this only by increasing context. Build a token-aware document pipeline: normalize, segment by headings/paragraphs, estimate or count tokens, summarize each chunk, synthesize the final explanation, and retrieve top relevant chunks for tutor questions. Preserve chunk IDs so the UI can show coverage and citations.
+The most important non-obvious defect is context size. The app accepts 250,000 characters and sends one prompt, while the phone artifact has a limited context and observed Ollama uses 4,096 tokens. Do not solve this only by increasing context. Build a token-aware document pipeline: normalize, segment by headings/paragraphs, count or estimate tokens, summarize chunks, synthesize explanations, and retrieve relevant chunks for tutor questions. Preserve chunk IDs for coverage and citations.
 
-The direct Ollama design was chosen because it is free, private, and quick to implement. It is good for one user on trusted Wi-Fi. It is not an internet-facing backend and must never be treated as one. It has no application authentication, TLS, rate limiting, tenancy, queue, or stable discovery. For remote use, prefer an authenticated private tunnel. For broad consumer scale, prefer on-device inference and keep Ollama as an optional provider.
+Gemma/LiteRT-LM was chosen because it removes network dependence and keeps strict Phone-mode text on the handset. The 1B model is fast enough for short passages but weaker and occasionally less precise than the computer model. Ollama was retained because it is free and gives the user a higher-quality local option; it is not an internet-facing backend and must never be exposed as one.
 
 Persistence currently optimizes for simplicity: one atomic JSON file for every study set and SharedPreferences for settings. This is safe enough for a small personal library, but it scales linearly and lacks migrations, indexed queries, and partial recovery. Migrate to Room before adding spaced repetition, search, tags, or sync. Store AI provenance, prompt version, model name, source revision, and chunk coverage alongside generated content.
 
 TTS is sentence-oriented. Pause is implemented by stopping the engine and replaying the current sentence on resume. Live highlighting depends on engine range callbacks and is not universally guaranteed. Preserve this fallback behavior, but isolate it from Compose so narration can be tested as a deterministic event/state machine.
 
-The recommended strategic design is a `StudyAiProvider` abstraction with three possible implementations: on-device AI for independence and privacy, secure Ollama for higher local quality, and an external-app share fallback. Capability detection should drive the interface. The UI must communicate whether a provider is available, which data leaves the phone, what document portion was used, and when an answer may be incomplete.
+The provider abstraction now exists through `AiTutorCoordinator`, `OnDeviceStudyTutor`, and `OllamaClient`. Preserve the explicit privacy modes and provenance. Next, add request IDs, source revisions, capability detection, cancellation, and streaming; then extract a narrower provider interface that no longer inherits computer-specific health semantics.
 
 In short: preserve the local-first product promise, fix source/version correlation and context handling first, harden LAN transport, then modularize. The current feature set is valuable and coherent; the next engineering work should improve correctness and trust before increasing feature count.
 
@@ -727,10 +748,12 @@ In short: preserve the local-first product promise, fix source/version correlati
 - [ML Kit GenAI APIs](https://developers.google.com/ml-kit/genai)
 - [ML Kit Prompt API for Gemini Nano](https://developers.google.com/ml-kit/genai/prompt/android/get-started)
 - [Google AI Edge LiteRT-LM](https://github.com/google-ai-edge/LiteRT-LM)
-- [Gemma 3n model card](https://ai.google.dev/gemma/docs/gemma-3n/model_card)
+- [LiteRT-LM Android documentation](https://ai.google.dev/edge/litert-lm)
+- [Gemma 3 1B LiteRT-LM model](https://huggingface.co/litert-community/Gemma3-1B-IT)
+- [Gemma 3 model overview](https://ai.google.dev/gemma/docs/core)
 
 ## 26. Final Assessment
 
 Enlighten has a strong personal-use MVP foundation and a clear user value proposition. Its current local architecture successfully avoids paid APIs and keeps most data processing on the user's devices. The application should not yet be released broadly because long-document correctness, asynchronous state integrity, LAN security, PDF memory safety, process recovery, and production distribution controls remain unresolved.
 
-The highest-return next milestone is not another visible feature. It is a reliability release that makes every AI result traceable to the correct source revision, makes long-document coverage explicit, secures the computer connection, and protects data through process death and backup. Once that foundation is in place, on-device AI can remove the computer dependency without forcing a redesign of the study experience.
+The highest-return next milestone is not another visible feature. It is a reliability release that makes every AI result traceable to the correct source revision, makes long-document coverage explicit, adds phone-generation cancellation and streaming, secures the optional computer connection, and protects data through process death and backup. Phone independence is implemented; the next job is making it durable across devices and longer study material.
